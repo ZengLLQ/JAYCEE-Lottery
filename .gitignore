@@ -1,0 +1,15 @@
+/build/
+/build-v2/
+/.vs/
+/out/
+.idea/
+.vscode/
+*.user
+*.suo
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+lottery_state*.txt
+JAYCEE-Lottery-Winners*.csv
