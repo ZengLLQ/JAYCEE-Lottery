@@ -20,7 +20,7 @@ JAYCEE Lottery combines an operator dashboard, participant and prize management,
 
 ## Download and install
 
-For another Windows computer, download and run one of these files:
+For another Windows computer, open the [latest GitHub release](https://github.com/ZengLLQ/JAYCEE-Lottery/releases/latest) or use one of the repository files below:
 
 - **Recommended:** [`JAYCEE-Lottery-Setup.exe`](dist/JAYCEE-Lottery-Setup.exe) — installs per user, creates Start Menu and uninstall entries, and can create a desktop shortcut.
 - **Portable executable:** [`JAYCEE Lottery.exe`](dist/JAYCEE%20Lottery.exe) — run directly without installation.
