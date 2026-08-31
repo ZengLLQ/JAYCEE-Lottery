@@ -66,7 +66,8 @@ Open **History** and choose **Reset Pool** to make confirmed entries eligible ag
 2. Open **Show**.
 3. Optionally enter an event title.
 4. Choose an accent theme and enable or disable reveal sound and confetti.
-5. Select **Open Audience Display**.
+5. Keep **3D motion** enabled for parallax, layered depth, animated transitions, and cinematic winner reveals; disable it for a calmer static interface.
+6. Select **Open Audience Display**.
 
 On a second monitor, the audience display opens fullscreen automatically. With one monitor, it opens as a resizable preview. The presentation rotates welcome, next-prize, and pool slides until a draw begins, then progresses through countdown, animation, reveal, and confirmed summary.
 
@@ -79,6 +80,8 @@ Use the **Interface Scale** control on the Show page or these shortcuts:
 - `Ctrl+0`: return to 100%.
 
 The range is 75% to 135%. When the scaled workspace is taller than the window, a slim scroll indicator appears at the right edge. Use the mouse wheel to move the page. When the pointer is over a long participant, result, or history list, the wheel scrolls that list first.
+
+The **3D motion** switch on the Show page pauses continuous parallax and transitions while retaining the interface's static depth and hierarchy.
 
 ## 7. Review and export results
 

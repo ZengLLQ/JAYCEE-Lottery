@@ -38,6 +38,7 @@ The release targets 64-bit Windows 10 and Windows 11. The setup executable is no
 - Local draw history with UTF-8 CSV export.
 - Separate audience display with welcome slides, prize preview, countdown, reveal, sound, and confetti.
 - Four accent themes and a clean dark interface.
+- Optional real-time 3D motion system with parallax lighting, perspective depth, hover lift, page transitions, and cinematic winner reveals.
 - Interface scaling from 75% to 135% plus mouse-wheel page scrolling.
 - Local autosave with no server, login, tracking, or internet requirement.
 

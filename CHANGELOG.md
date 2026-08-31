@@ -2,6 +2,22 @@
 
 All notable changes to JAYCEE Lottery are documented here.
 
+## 2.1.0 - 2026-09-01
+
+### Added
+
+- Real-time 3D motion system with animated parallax lighting and a perspective background grid.
+- Layered elevation, glossy highlights, hover lift, and depth feedback across cards and controls.
+- Spring-based page, dialog, toast, and staggered winner-entry transitions.
+- Orbital 3D draw animation and a cinematic audience countdown and reveal sequence.
+- Optional **3D motion** setting for users who prefer a static interface.
+
+### Improved
+
+- Audience display now uses moving light fields, perspective depth, orbital draw effects, elevated winner cards, and dimensional confetti.
+- Show preview now visualizes the 3D orbit system in real time.
+- Buttons, navigation, prize cards, statistics, participants, history, and modal dialogs share one consistent depth language.
+
 ## 2.0.0 - 2026-08-30
 
 ### Added

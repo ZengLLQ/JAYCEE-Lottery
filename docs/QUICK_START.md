@@ -23,7 +23,7 @@ Imported participants replace numeric mode. The optional group column can restri
 
 ## Present to an audience
 
-Open **Show**, customize the theme and effects, then select **Open Audience Display**. The window opens fullscreen on a second monitor when one is available.
+Open **Show**, customize the theme and effects, then select **Open Audience Display**. Keep **3D motion** enabled for parallax depth, transitions, and cinematic winner reveals. The window opens fullscreen on a second monitor when one is available.
 
 ## Useful controls
 
