@@ -5,6 +5,7 @@
 #include <shlobj.h>
 #include <shobjidl.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -13,7 +14,7 @@ namespace {
 
 constexpr wchar_t kInstallerClass[] = L"JAYCEELotteryInstallerWindow";
 constexpr wchar_t kProductName[] = L"JAYCEE Lottery";
-constexpr wchar_t kVersion[] = L"2.1.0";
+constexpr wchar_t kVersion[] = L"2.2.0";
 constexpr int kIconResource = 101;
 constexpr int kAppResource = 201;
 constexpr int kReadmeResource = 202;
@@ -166,7 +167,7 @@ public:
         klass.lpfnWndProc = WindowProc;
         klass.hInstance = instance_;
         klass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-        klass.hbrBackground = CreateSolidBrush(RGB(9, 10, 14));
+        klass.hbrBackground = CreateSolidBrush(RGB(7, 16, 31));
         klass.hIcon = static_cast<HICON>(LoadImageW(instance_, MAKEINTRESOURCEW(kIconResource), IMAGE_ICON,
                                                     32, 32, LR_DEFAULTCOLOR));
         klass.hIconSm = static_cast<HICON>(LoadImageW(instance_, MAKEINTRESOURCEW(kIconResource), IMAGE_ICON,
@@ -228,6 +229,30 @@ private:
         DeleteObject(brush);
     }
 
+    void OutlineRounded(HDC dc, const RECT& rect, COLORREF color, int radius, int width = 1) {
+        HPEN pen = CreatePen(PS_SOLID, width, color);
+        HGDIOBJ oldPen = SelectObject(dc, pen);
+        HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+        RoundRect(dc, rect.left, rect.top, rect.right, rect.bottom, radius, radius);
+        SelectObject(dc, oldBrush);
+        SelectObject(dc, oldPen);
+        DeleteObject(pen);
+    }
+
+    void VerticalGradient(HDC dc, const RECT& rect, COLORREF top, COLORREF bottom) {
+        const int height = std::max(1L, rect.bottom - rect.top);
+        for (int y = 0; y < height; y += 3) {
+            const float t = static_cast<float>(y) / static_cast<float>(height);
+            const int red = static_cast<int>(GetRValue(top) + (GetRValue(bottom) - GetRValue(top)) * t);
+            const int green = static_cast<int>(GetGValue(top) + (GetGValue(bottom) - GetGValue(top)) * t);
+            const int blue = static_cast<int>(GetBValue(top) + (GetBValue(bottom) - GetBValue(top)) * t);
+            RECT strip{rect.left, rect.top + y, rect.right, std::min(rect.bottom, rect.top + y + 3)};
+            HBRUSH brush = CreateSolidBrush(RGB(red, green, blue));
+            FillRect(dc, &strip, brush);
+            DeleteObject(brush);
+        }
+    }
+
     void DrawTextLine(HDC dc, const std::wstring& text, RECT rect, int size, int weight,
                       COLORREF color, UINT flags = DT_LEFT | DT_VCENTER | DT_SINGLELINE) {
         HFONT font = CreateFontW(-size, 0, 0, 0, weight, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
@@ -246,17 +271,26 @@ private:
         HDC dc = BeginPaint(hwnd_, &paint);
         RECT client{};
         GetClientRect(hwnd_, &client);
-        HBRUSH background = CreateSolidBrush(RGB(8, 9, 13));
-        FillRect(dc, &client, background);
-        DeleteObject(background);
+        VerticalGradient(dc, client, RGB(7, 16, 31), RGB(24, 16, 42));
 
-        Rounded(dc, RECT{0, 0, client.right, 132}, RGB(15, 18, 28), 0);
-        Rounded(dc, RECT{50, 38, 94, 82}, RGB(18, 19, 22), 12);
-        DrawTextLine(dc, L"J", RECT{50, 38, 94, 82}, 25, FW_BOLD, RGB(255, 255, 255),
+        HBRUSH coralGlow = CreateSolidBrush(RGB(63, 31, 47));
+        HGDIOBJ oldGlow = SelectObject(dc, coralGlow);
+        HGDIOBJ oldPen = SelectObject(dc, GetStockObject(NULL_PEN));
+        Ellipse(dc, 480, -82, 790, 210);
+        SelectObject(dc, oldPen);
+        SelectObject(dc, oldGlow);
+        DeleteObject(coralGlow);
+
+        Rounded(dc, RECT{29, 24, 671, 122}, RGB(28, 38, 60), 28);
+        OutlineRounded(dc, RECT{29, 24, 671, 122}, RGB(109, 126, 157), 28);
+        OutlineRounded(dc, RECT{31, 26, 669, 120}, RGB(49, 65, 92), 26);
+        Rounded(dc, RECT{50, 49, 94, 93}, RGB(255, 120, 103), 14);
+        OutlineRounded(dc, RECT{50, 49, 94, 93}, RGB(255, 214, 204), 14);
+        DrawTextLine(dc, L"J", RECT{50, 49, 94, 93}, 25, FW_BOLD, RGB(255, 255, 255),
                      DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        DrawTextLine(dc, L"JAYCEE LOTTERY", RECT{112, 36, 470, 66}, 24, FW_SEMIBOLD, RGB(246, 247, 251));
-        DrawTextLine(dc, L"Event Studio · Version 2.1", RECT{112, 68, 470, 93}, 14, FW_NORMAL, RGB(145, 152, 168));
-        DrawTextLine(dc, L"NATIVE WINDOWS APP", RECT{500, 48, 648, 78}, 12, FW_SEMIBOLD, RGB(133, 148, 255),
+        DrawTextLine(dc, L"JAYCEE LOTTERY", RECT{112, 46, 470, 76}, 24, FW_SEMIBOLD, RGB(249, 251, 255));
+        DrawTextLine(dc, L"Liquid Glass Edition · Version 2.2", RECT{112, 77, 470, 102}, 14, FW_NORMAL, RGB(184, 194, 213));
+        DrawTextLine(dc, L"NATIVE WINDOWS APP", RECT{500, 58, 648, 88}, 12, FW_SEMIBOLD, RGB(255, 185, 133),
                      DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
         DrawTextLine(dc, state_ == InstallState::Complete ? L"You’re ready for the draw." : L"Install JAYCEE Lottery",
@@ -269,12 +303,14 @@ private:
         DrawTextLine(dc, detail, RECT{50, 202, 650, 246}, 15, FW_NORMAL,
                      state_ == InstallState::Failed ? RGB(255, 125, 125) : RGB(151, 157, 171), DT_LEFT | DT_WORDBREAK);
 
-        Rounded(dc, RECT{50, 266, 650, 340}, RGB(18, 20, 27), 18);
-        DrawTextLine(dc, L"INSTALL LOCATION", RECT{70, 277, 620, 299}, 11, FW_SEMIBOLD, RGB(113, 121, 139));
+        Rounded(dc, RECT{50, 266, 650, 340}, RGB(28, 39, 60), 22);
+        OutlineRounded(dc, RECT{50, 266, 650, 340}, RGB(88, 106, 139), 22);
+        OutlineRounded(dc, RECT{52, 268, 648, 338}, RGB(43, 58, 84), 20);
+        DrawTextLine(dc, L"INSTALL LOCATION", RECT{70, 277, 620, 299}, 11, FW_SEMIBOLD, RGB(151, 165, 190));
         DrawTextLine(dc, InstallDirectory().wstring(), RECT{70, 301, 620, 328}, 14, FW_NORMAL, RGB(230, 233, 240));
 
         if (state_ != InstallState::Complete) {
-            Rounded(dc, RECT{50, 367, 70, 387}, desktopShortcut_ ? RGB(91, 112, 255) : RGB(43, 47, 57), 6);
+            Rounded(dc, RECT{50, 367, 70, 387}, desktopShortcut_ ? RGB(255, 120, 103) : RGB(55, 65, 83), 8);
             if (desktopShortcut_) DrawTextLine(dc, L"✓", RECT{50, 366, 70, 388}, 14, FW_BOLD, RGB(255, 255, 255),
                                               DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             DrawTextLine(dc, L"Create a desktop shortcut", RECT{82, 361, 330, 393}, 14, FW_NORMAL, RGB(207, 211, 220));
@@ -282,11 +318,13 @@ private:
             DrawTextLine(dc, L"Installation complete", RECT{50, 360, 330, 395}, 14, FW_SEMIBOLD, RGB(103, 222, 159));
         }
 
-        Rounded(dc, cancelButton_, RGB(34, 37, 46), 14);
+        Rounded(dc, cancelButton_, RGB(40, 51, 72), 18);
+        OutlineRounded(dc, cancelButton_, RGB(96, 112, 143), 18);
         DrawTextLine(dc, state_ == InstallState::Complete ? L"CLOSE" : L"CANCEL", cancelButton_,
                      13, FW_SEMIBOLD, RGB(210, 214, 223), DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        const COLORREF primary = state_ == InstallState::Failed ? RGB(88, 94, 108) : RGB(91, 112, 255);
-        Rounded(dc, installButton_, primary, 14);
+        const COLORREF primary = state_ == InstallState::Failed ? RGB(88, 94, 108) : RGB(255, 120, 103);
+        Rounded(dc, installButton_, primary, 18);
+        OutlineRounded(dc, installButton_, state_ == InstallState::Failed ? RGB(120, 126, 139) : RGB(255, 213, 203), 18);
         const wchar_t* label = state_ == InstallState::Complete ? L"LAUNCH JAYCEE LOTTERY"
                               : state_ == InstallState::Installing ? L"INSTALLING…" : L"INSTALL";
         DrawTextLine(dc, label, installButton_, 13, FW_SEMIBOLD, RGB(255, 255, 255),

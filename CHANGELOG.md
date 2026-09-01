@@ -2,6 +2,22 @@
 
 All notable changes to JAYCEE Lottery are documented here.
 
+## 2.2.0 - 2026-09-01
+
+### Added
+
+- Golden Gate Liquid Glass visual system with a coral, amber, sky-blue, and violet atmospheric palette.
+- Reusable layered glass renderer with diffuse depth, translucent tint, dual rim lighting, specular highlights, and pointer-responsive lens illumination.
+- Floating capsule navigation and matching glass controls, dialogs, toasts, cards, and audience-display chrome.
+- Inertia-smoothed page, history, participant, and result scrolling.
+
+### Improved
+
+- Motion timing is slower and more fluid across page changes, dialogs, notifications, and ambient backgrounds.
+- Audience presentation now shares the same sunset light field, glass winner cards, and floating navigation treatment.
+- Installer visuals now match the application with rounded glass-inspired panels and the Golden Gate color palette.
+- The former **3D motion** setting is now named **Liquid motion** and remains the single switch for reduced-motion operation.
+
 ## 2.1.0 - 2026-09-01
 
 ### Added

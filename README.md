@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  A modern, native Windows lottery draw studio for live events.
+  A native Windows lottery studio with a Golden Gate Liquid Glass interface.
 </p>
 
 <p align="center">
@@ -37,9 +37,9 @@ The release targets 64-bit Windows 10 and Windows 11. The setup executable is no
 - Prize management with default winner counts and group eligibility.
 - Local draw history with UTF-8 CSV export.
 - Separate audience display with welcome slides, prize preview, countdown, reveal, sound, and confetti.
-- Four accent themes and a clean dark interface.
-- Optional real-time 3D motion system with parallax lighting, perspective depth, hover lift, page transitions, and cinematic winner reveals.
-- Interface scaling from 75% to 135% plus mouse-wheel page scrolling.
+- Golden Gate Liquid Glass design with floating navigation, translucent materials, specular edge lighting, and a coral–amber–sky color atmosphere.
+- Four adaptive glass tints and an optional real-time Liquid Motion system with smoothed pointer lensing, ambient light, spring transitions, and cinematic winner reveals.
+- Interface scaling from 75% to 135% plus inertia-smoothed mouse-wheel scrolling.
 - Local autosave with no server, login, tracking, or internet requirement.
 
 ## Quick start
@@ -58,7 +58,11 @@ For complete operating instructions, see the [User Guide](docs/USER_GUIDE.md).
 
 ![JAYCEE Lottery audience controls](docs/images/audience-controls.png)
 
-The audience display automatically opens fullscreen on a second monitor when one is available. Otherwise, it opens as a resizable preview window. Its sequence includes welcome, next-prize and pool slides, then countdown, draw animation, reveal, and confirmed summary states.
+The audience display automatically opens fullscreen on a second monitor when one is available. Otherwise, it opens as a resizable preview window. Its sequence includes welcome, next-prize and pool slides, then countdown, draw animation, reveal, and confirmed summary states. Version 2.2 carries the same Golden Gate atmosphere and floating glass language into the projector view.
+
+## Motion and accessibility
+
+Liquid Motion is enabled by default and drives the slow atmospheric light field, pointer-responsive glass highlights, spring page changes, and eased scrolling. Turn it off on **Show** to keep the complete interface static while preserving all functionality and contrast.
 
 ## Keyboard and navigation
 
