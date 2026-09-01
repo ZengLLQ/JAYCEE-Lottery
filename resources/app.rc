@@ -4,8 +4,8 @@
 101 ICON "jaycee.ico"
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 2,2,0,0
- PRODUCTVERSION 2,2,0,0
+ FILEVERSION 2,2,1,0
+ PRODUCTVERSION 2,2,1,0
  FILEFLAGSMASK 0x3fL
  FILEFLAGS 0x0L
  FILEOS 0x40004L
@@ -18,11 +18,11 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "JAYCEE"
             VALUE "FileDescription", "JAYCEE Lottery event drawing and presentation system"
-            VALUE "FileVersion", "2.2.0"
+            VALUE "FileVersion", "2.2.1"
             VALUE "InternalName", "JAYCEELottery"
             VALUE "OriginalFilename", "JAYCEE Lottery.exe"
             VALUE "ProductName", "JAYCEE Lottery"
-            VALUE "ProductVersion", "2.2.0"
+            VALUE "ProductVersion", "2.2.1"
         END
     END
     BLOCK "VarFileInfo"

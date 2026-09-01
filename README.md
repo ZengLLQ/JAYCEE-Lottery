@@ -62,7 +62,7 @@ The audience display automatically opens fullscreen on a second monitor when one
 
 ## Motion and accessibility
 
-Liquid Motion is enabled by default and drives the slow atmospheric light field, pointer-responsive glass highlights, spring page changes, and eased scrolling. Turn it off on **Show** to keep the complete interface static while preserving all functionality and contrast.
+Liquid Motion is enabled by default and drives the slow atmospheric light field, pointer-responsive glass highlights, spring page changes, and eased scrolling. Version 2.2.1 uses high-resolution, refresh-rate-independent timing so the motion remains consistent on 60 Hz through high-refresh displays. Turn it off on **Show** to keep the complete interface static while preserving all functionality and contrast.
 
 ## Keyboard and navigation
 

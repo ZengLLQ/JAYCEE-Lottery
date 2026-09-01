@@ -14,7 +14,7 @@ namespace {
 
 constexpr wchar_t kInstallerClass[] = L"JAYCEELotteryInstallerWindow";
 constexpr wchar_t kProductName[] = L"JAYCEE Lottery";
-constexpr wchar_t kVersion[] = L"2.2.0";
+constexpr wchar_t kVersion[] = L"2.2.1";
 constexpr int kIconResource = 101;
 constexpr int kAppResource = 201;
 constexpr int kReadmeResource = 202;
@@ -289,7 +289,7 @@ private:
         DrawTextLine(dc, L"J", RECT{50, 49, 94, 93}, 25, FW_BOLD, RGB(255, 255, 255),
                      DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         DrawTextLine(dc, L"JAYCEE LOTTERY", RECT{112, 46, 470, 76}, 24, FW_SEMIBOLD, RGB(249, 251, 255));
-        DrawTextLine(dc, L"Liquid Glass Edition · Version 2.2", RECT{112, 77, 470, 102}, 14, FW_NORMAL, RGB(184, 194, 213));
+        DrawTextLine(dc, L"Liquid Glass Edition · Version 2.2.1", RECT{112, 77, 470, 102}, 14, FW_NORMAL, RGB(184, 194, 213));
         DrawTextLine(dc, L"NATIVE WINDOWS APP", RECT{500, 58, 648, 88}, 12, FW_SEMIBOLD, RGB(255, 185, 133),
                      DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 

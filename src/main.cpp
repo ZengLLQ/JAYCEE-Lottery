@@ -30,6 +30,7 @@ constexpr wchar_t kWindowClass[] = L"JAYCEELotteryWindowClass";
 constexpr wchar_t kPresentationClass[] = L"JAYCEELotteryPresentationClass";
 constexpr wchar_t kWindowTitle[] = L"JAYCEE Lottery — Event Studio";
 constexpr UINT_PTR kAnimationTimer = 1;
+constexpr UINT kAnimationFrameMs = 8;
 constexpr UINT kDrawDelayMs = 1450;
 constexpr UINT kShowCountdownMs = 3000;
 constexpr int kAppIconResource = 101;
@@ -51,6 +52,14 @@ D2D1_COLOR_F Color(unsigned hex, float alpha = 1.0f) {
         alpha);
 }
 
+D2D1_COLOR_F MixColor(D2D1_COLOR_F from, D2D1_COLOR_F to, float amount) {
+    const float t = std::clamp(amount, 0.0f, 1.0f);
+    return D2D1::ColorF(from.r + (to.r - from.r) * t,
+                        from.g + (to.g - from.g) * t,
+                        from.b + (to.b - from.b) * t,
+                        from.a + (to.a - from.a) * t);
+}
+
 bool Contains(const D2D1_RECT_F& rect, float x, float y) {
     return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 }
@@ -67,7 +76,7 @@ float EaseOutCubic(float value) {
 
 float EaseOutBack(float value) {
     const float t = Saturate(value) - 1.0f;
-    constexpr float overshoot = 1.70158f;
+    constexpr float overshoot = 0.72f;
     return 1.0f + (overshoot + 1.0f) * t * t * t + overshoot * t * t;
 }
 
@@ -333,6 +342,7 @@ public:
     explicit JayceeLotteryApp(HINSTANCE instance) : instance_(instance) {}
 
     ~JayceeLotteryApp() {
+        if (highResolutionTimer_) timeEndPeriod(1);
         SafeRelease(presentationBrush_);
         SafeRelease(presentationTarget_);
         DiscardDeviceResources();
@@ -363,7 +373,9 @@ public:
             CoUninitialize();
             return 1;
         }
-        SetTimer(window_, kAnimationTimer, 16, nullptr);
+        highResolutionTimer_ = timeBeginPeriod(1) == TIMERR_NOERROR;
+        lastAnimationTick_ = std::chrono::steady_clock::now();
+        SetTimer(window_, kAnimationTimer, kAnimationFrameMs, nullptr);
 
         MSG message{};
         while (GetMessageW(&message, nullptr, 0, 0) > 0) {
@@ -415,6 +427,7 @@ private:
     std::chrono::steady_clock::time_point confirmStarted_ = std::chrono::steady_clock::now() - std::chrono::seconds(3);
     std::chrono::steady_clock::time_point toastStarted_ = std::chrono::steady_clock::now() - std::chrono::seconds(3);
     std::chrono::steady_clock::time_point dialogAnimationStarted_ = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point lastAnimationTick_ = std::chrono::steady_clock::now();
     std::vector<int> latestNumbers_;
     std::vector<WinnerRecord> pendingWinners_;
     PresentationPhase presentationPhase_ = PresentationPhase::Idle;
@@ -434,6 +447,9 @@ private:
     float historyScrollTarget_ = 0.0f;
     float resultScrollTarget_ = 0.0f;
     float participantsScrollTarget_ = 0.0f;
+    float frameDeltaSeconds_ = 1.0f / 60.0f;
+    bool highResolutionTimer_ = false;
+    std::unordered_map<std::uint64_t, float> hoverAnimations_;
     std::wstring toast_;
     std::chrono::steady_clock::time_point toastUntil_{};
     std::filesystem::path statePath_;
@@ -1182,27 +1198,42 @@ private:
 
         const float top = 78.0f;
         if (presentationPhase_ == PresentationPhase::Idle) {
-            const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - slideshowStarted_).count();
-            const int slide = static_cast<int>((elapsed / 6) % 3);
+            const float slideSeconds = std::fmod(static_cast<float>(elapsed) / 1000.0f, 6.0f);
+            const int slide = static_cast<int>((elapsed / 6000) % 3);
+            const float enter = EaseInOutSine(Saturate(slideSeconds / 0.85f));
+            const float leave = EaseInOutSine(Saturate((6.0f - slideSeconds) / 0.85f));
+            const float slideOpacity = std::min(enter, leave);
+            const float slideOffset = (1.0f - enter) * 34.0f - (1.0f - leave) * 26.0f;
+            auto slideRect = [&](const D2D1_RECT_F& rect) { return OffsetRectF(rect, 0.0f, slideOffset); };
             if (slide == 0) {
                 text(data_.eventName.empty() ? L"WELCOME" : L"WELCOME TO",
-                     D2D1::RectF(30, top + 30, width - 30, top + 80), formatHeading_, Color(accentHex));
+                     slideRect(D2D1::RectF(30, top + 30, width - 30, top + 80)), formatHeading_,
+                     Color(accentHex, slideOpacity));
                 text(data_.eventName.empty() ? L"JAYCEE LOTTERY" : data_.eventName,
-                     D2D1::RectF(45, top + 80, width - 45, height - 145), formatHero_, Color(0xf7f8fb));
-                text(L"Tonight, every number can become a moment.", D2D1::RectF(40, height - 140, width - 40, height - 80),
-                     formatBody_, Color(0xa4aab6));
+                     slideRect(D2D1::RectF(45, top + 80, width - 45, height - 145)), formatHero_,
+                     Color(0xf7f8fb, slideOpacity));
+                text(L"Tonight, every number can become a moment.",
+                     slideRect(D2D1::RectF(40, height - 140, width - 40, height - 80)),
+                     formatBody_, Color(0xa4aab6, slideOpacity));
             } else if (slide == 1) {
-                text(L"NEXT PRIZE", D2D1::RectF(40, top + 35, width - 40, top + 90), formatHeading_, Color(accentHex));
-                text(ActivePrize().name, D2D1::RectF(45, top + 90, width - 45, height - 150), formatHero_, Color(0xf7f8fb));
+                text(L"NEXT PRIZE", slideRect(D2D1::RectF(40, top + 35, width - 40, top + 90)),
+                     formatHeading_, Color(accentHex, slideOpacity));
+                text(ActivePrize().name, slideRect(D2D1::RectF(45, top + 90, width - 45, height - 150)),
+                     formatHero_, Color(0xf7f8fb, slideOpacity));
                 text(std::to_wstring(data_.quantity) + L" winner" + (data_.quantity == 1 ? L"" : L"s"),
-                     D2D1::RectF(40, height - 145, width - 40, height - 85), formatHeading_, Color(0xc8ccd6));
+                     slideRect(D2D1::RectF(40, height - 145, width - 40, height - 85)),
+                     formatHeading_, Color(0xc8ccd6, slideOpacity));
             } else {
-                text(L"THE POOL IS READY", D2D1::RectF(40, top + 35, width - 40, top + 90), formatHeading_, Color(accentHex));
+                text(L"THE POOL IS READY", slideRect(D2D1::RectF(40, top + 35, width - 40, top + 90)),
+                     formatHeading_, Color(accentHex, slideOpacity));
                 text(std::to_wstring(data_.noRepeat ? RemainingCount() : PoolSize()),
-                     D2D1::RectF(40, top + 85, width - 40, height - 150), formatHero_, Color(0xf7f8fb));
+                     slideRect(D2D1::RectF(40, top + 85, width - 40, height - 150)),
+                     formatHero_, Color(0xf7f8fb, slideOpacity));
                 text(data_.participants.empty() ? L"eligible coupon numbers" : L"eligible participants",
-                     D2D1::RectF(40, height - 150, width - 40, height - 86), formatHeading_, Color(0xa4aab6));
+                     slideRect(D2D1::RectF(40, height - 150, width - 40, height - 86)),
+                     formatHeading_, Color(0xa4aab6, slideOpacity));
             }
         } else if (presentationPhase_ == PresentationPhase::Countdown) {
             const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -1527,8 +1558,15 @@ private:
             if (HandleKeyDown(wParam)) return 0;
             break;
         case WM_TIMER:
+            {
+                const auto now = std::chrono::steady_clock::now();
+                frameDeltaSeconds_ = std::clamp(std::chrono::duration<float>(now - lastAnimationTick_).count(),
+                                                1.0f / 240.0f, 1.0f / 20.0f);
+                lastAnimationTick_ = now;
+            }
             if (data_.motionEnabled) {
-                const float pointerBlend = 0.105f;
+                const float pointerBlend = 1.0f - std::exp(-10.5f * frameDeltaSeconds_);
+                const float scrollBlend = 1.0f - std::exp(-11.5f * frameDeltaSeconds_);
                 const float targetX = mouseX_ > -100.0f ? mouseX_ : CanvasSize().width * 0.5f;
                 const float targetY = mouseY_ > -100.0f ? mouseY_ : CanvasSize().height * 0.35f;
                 if (visualMouseX_ < -100.0f) {
@@ -1538,10 +1576,10 @@ private:
                     visualMouseX_ += (targetX - visualMouseX_) * pointerBlend;
                     visualMouseY_ += (targetY - visualMouseY_) * pointerBlend;
                 }
-                pageScroll_ += (pageScrollTarget_ - pageScroll_) * 0.18f;
-                historyScroll_ += (historyScrollTarget_ - historyScroll_) * 0.18f;
-                resultScroll_ += (resultScrollTarget_ - resultScroll_) * 0.18f;
-                participantsScroll_ += (participantsScrollTarget_ - participantsScroll_) * 0.18f;
+                pageScroll_ += (pageScrollTarget_ - pageScroll_) * scrollBlend;
+                historyScroll_ += (historyScrollTarget_ - historyScroll_) * scrollBlend;
+                resultScroll_ += (resultScrollTarget_ - resultScroll_) * scrollBlend;
+                participantsScroll_ += (participantsScrollTarget_ - participantsScroll_) * scrollBlend;
             } else {
                 pageScroll_ = pageScrollTarget_;
                 historyScroll_ = historyScrollTarget_;
@@ -1893,6 +1931,32 @@ private:
         return Saturate(elapsed / durationMs);
     }
 
+    std::uint64_t RectAnimationKey(const D2D1_RECT_F& rect, std::uint64_t salt = 0) const {
+        auto quantize = [](float value) -> std::uint64_t {
+            return static_cast<std::uint64_t>(static_cast<std::int64_t>(std::llround(value * 2.0f)) + 131072);
+        };
+        std::uint64_t hash = 1469598103934665603ULL ^ salt;
+        for (const std::uint64_t value : {quantize(rect.left), quantize(rect.top),
+                                          quantize(rect.right), quantize(rect.bottom)}) {
+            hash ^= value;
+            hash *= 1099511628211ULL;
+        }
+        return hash;
+    }
+
+    float SmoothedHover(const D2D1_RECT_F& rect, bool hovered, std::uint64_t salt = 0) {
+        if (!data_.motionEnabled) return hovered ? 1.0f : 0.0f;
+        const std::uint64_t key = RectAnimationKey(rect, salt);
+        if (hoverAnimations_.size() > 512 && !hoverAnimations_.contains(key)) hoverAnimations_.clear();
+        float& amount = hoverAnimations_[key];
+        const float response = hovered ? 18.0f : 12.0f;
+        const float blend = 1.0f - std::exp(-response * frameDeltaSeconds_);
+        amount += ((hovered ? 1.0f : 0.0f) - amount) * blend;
+        if (amount < 0.001f) amount = 0.0f;
+        else if (amount > 0.999f) amount = 1.0f;
+        return amount;
+    }
+
     void DrawElevation(const D2D1_RECT_F& rect, float radius, float elevation = 10.0f, float opacity = 0.28f) {
         const float depth = data_.motionEnabled ? elevation : elevation * 0.55f;
         FillRounded(OffsetRectF(ScaleRectF(rect, 1.020f), 0.0f, depth * 1.10f), radius + 8.0f,
@@ -1904,39 +1968,35 @@ private:
     }
 
     void DrawGlassHighlight(const D2D1_RECT_F& rect, float radius, float intensity = 1.0f) {
-        ID2D1GradientStopCollection* stops = nullptr;
-        ID2D1LinearGradientBrush* gradient = nullptr;
-        const D2D1_GRADIENT_STOP gradientStops[] = {
-            {0.0f, Color(0xffffff, 0.180f * intensity)},
-            {0.22f, Color(0xffffff, 0.045f * intensity)},
-            {0.58f, Color(AccentHex(), 0.034f * intensity)},
-            {1.0f, Color(0x020817, 0.110f * intensity)}
-        };
-        if (SUCCEEDED(renderTarget_->CreateGradientStopCollection(gradientStops, 4, &stops))) {
-            renderTarget_->CreateLinearGradientBrush(
-                D2D1::LinearGradientBrushProperties(D2D1::Point2F(rect.left, rect.top),
-                                                     D2D1::Point2F(rect.right, rect.bottom)),
-                stops, &gradient);
-        }
-        if (gradient) renderTarget_->FillRoundedRectangle(D2D1::RoundedRect(rect, radius, radius), gradient);
-        SafeRelease(gradient);
-        SafeRelease(stops);
+        FillRounded(rect, radius, Color(0xffffff, 0.012f * intensity));
+        SetBrush(Color(0xffffff, 0.20f * intensity));
+        renderTarget_->DrawLine(D2D1::Point2F(rect.left + radius, rect.top + 1.0f),
+                                D2D1::Point2F(rect.right - radius, rect.top + 1.0f), brush_, 1.0f);
+        SetBrush(Color(0xffffff, 0.075f * intensity));
+        renderTarget_->DrawLine(D2D1::Point2F(rect.left + 1.0f, rect.top + radius),
+                                D2D1::Point2F(rect.left + 1.0f, rect.bottom - radius), brush_, 0.8f);
+        SetBrush(Color(AccentHex(), 0.055f * intensity));
+        renderTarget_->DrawLine(D2D1::Point2F(rect.left + radius, rect.bottom - 1.0f),
+                                D2D1::Point2F(rect.right - radius, rect.bottom - 1.0f), brush_, 0.8f);
     }
 
     void DrawLiquidGlass(const D2D1_RECT_F& rect, float radius, bool interactive = false,
                          bool thick = false) {
-        const bool hover = interactive && dialog_ == DialogType::None && Contains(rect, mouseX_, mouseY_);
+        const bool hovered = interactive && dialog_ == DialogType::None && Contains(rect, mouseX_, mouseY_);
+        const float hover = interactive ? SmoothedHover(rect, hovered, 0x4c4951554944474cULL) : 0.0f;
         const D2D1_RECT_F visual = rect;
-        DrawElevation(visual, radius, hover ? 15.0f : (thick ? 12.0f : 8.0f),
-                      hover ? 0.44f : (thick ? 0.34f : 0.24f));
+        const float baseElevation = thick ? 12.0f : 8.0f;
+        const float baseOpacity = thick ? 0.34f : 0.24f;
+        DrawElevation(visual, radius, baseElevation + (15.0f - baseElevation) * hover,
+                      baseOpacity + (0.44f - baseOpacity) * hover);
 
         ID2D1GradientStopCollection* stops = nullptr;
         ID2D1LinearGradientBrush* glass = nullptr;
         const float density = thick ? 1.0f : 0.72f;
         const D2D1_GRADIENT_STOP glassStops[] = {
-            {0.0f, Color(0xffffff, (hover ? 0.205f : 0.155f) * density)},
+            {0.0f, Color(0xffffff, (0.155f + 0.050f * hover) * density)},
             {0.28f, Color(0xdde9ff, 0.090f * density)},
-            {0.62f, Color(AccentHex(), (hover ? 0.075f : 0.046f) * density)},
+            {0.62f, Color(AccentHex(), (0.046f + 0.029f * hover) * density)},
             {1.0f, Color(0x081326, (thick ? 0.46f : 0.34f))}
         };
         if (SUCCEEDED(renderTarget_->CreateGradientStopCollection(glassStops, 4, &stops))) {
@@ -1949,34 +2009,37 @@ private:
         SafeRelease(glass);
         SafeRelease(stops);
 
-        const float lensX = std::clamp(visualMouseX_, visual.left, visual.right);
-        const float lensY = std::clamp(visualMouseY_, visual.top, visual.bottom);
-        ID2D1GradientStopCollection* lensStops = nullptr;
-        ID2D1RadialGradientBrush* lens = nullptr;
-        const float lensAlpha = hover ? 0.30f : 0.12f;
-        const D2D1_GRADIENT_STOP lensValues[] = {
-            {0.0f, Color(0xffffff, lensAlpha)},
-            {0.26f, Color(0xffd4b0, lensAlpha * 0.23f)},
-            {0.58f, Color(0x8ac8ff, lensAlpha * 0.10f)},
-            {1.0f, Color(0xffffff, 0.0f)}
-        };
-        if (SUCCEEDED(renderTarget_->CreateGradientStopCollection(lensValues, 4, &lensStops))) {
-            const float lensRadius = std::max(90.0f, std::min(Width(visual), Height(visual)) * 1.55f);
-            renderTarget_->CreateRadialGradientBrush(
-                D2D1::RadialGradientBrushProperties(D2D1::Point2F(lensX, lensY), D2D1::Point2F(),
-                                                     lensRadius, lensRadius * 0.76f),
-                lensStops, &lens);
+        if (hover > 0.004f) {
+            const float lensX = std::clamp(visualMouseX_, visual.left, visual.right);
+            const float lensY = std::clamp(visualMouseY_, visual.top, visual.bottom);
+            ID2D1GradientStopCollection* lensStops = nullptr;
+            ID2D1RadialGradientBrush* lens = nullptr;
+            const float lensAlpha = 0.30f * hover;
+            const D2D1_GRADIENT_STOP lensValues[] = {
+                {0.0f, Color(0xffffff, lensAlpha)},
+                {0.26f, Color(0xffd4b0, lensAlpha * 0.23f)},
+                {0.58f, Color(0x8ac8ff, lensAlpha * 0.10f)},
+                {1.0f, Color(0xffffff, 0.0f)}
+            };
+            if (SUCCEEDED(renderTarget_->CreateGradientStopCollection(lensValues, 4, &lensStops))) {
+                const float lensRadius = std::max(90.0f, std::min(Width(visual), Height(visual)) * 1.55f);
+                renderTarget_->CreateRadialGradientBrush(
+                    D2D1::RadialGradientBrushProperties(D2D1::Point2F(lensX, lensY), D2D1::Point2F(),
+                                                         lensRadius, lensRadius * 0.76f),
+                    lensStops, &lens);
+            }
+            if (lens) renderTarget_->FillRoundedRectangle(D2D1::RoundedRect(visual, radius, radius), lens);
+            SafeRelease(lens);
+            SafeRelease(lensStops);
         }
-        if (lens) renderTarget_->FillRoundedRectangle(D2D1::RoundedRect(visual, radius, radius), lens);
-        SafeRelease(lens);
-        SafeRelease(lensStops);
 
-        DrawGlassHighlight(visual, radius, hover ? 1.35f : (thick ? 0.92f : 0.70f));
-        StrokeRounded(visual, radius, Color(0xffffff, hover ? 0.42f : 0.22f), hover ? 1.35f : 1.0f);
+        const float baseHighlight = thick ? 0.92f : 0.70f;
+        DrawGlassHighlight(visual, radius, baseHighlight + (1.35f - baseHighlight) * hover);
+        StrokeRounded(visual, radius, Color(0xffffff, 0.22f + 0.20f * hover), 1.0f + 0.35f * hover);
         StrokeRounded(D2D1::RectF(visual.left + 1.5f, visual.top + 1.5f,
                                   visual.right - 1.5f, visual.bottom - 1.5f),
-                      std::max(1.0f, radius - 1.5f), Color(0x9bc5ff, hover ? 0.12f : 0.055f), 0.8f);
-        SetBrush(Color(0xffffff, hover ? 0.34f : 0.19f));
+                      std::max(1.0f, radius - 1.5f), Color(0x9bc5ff, 0.055f + 0.065f * hover), 0.8f);
+        SetBrush(Color(0xffffff, 0.19f + 0.15f * hover));
         renderTarget_->DrawLine(D2D1::Point2F(visual.left + radius, visual.top + 1.0f),
                                 D2D1::Point2F(visual.right - radius, visual.top + 1.0f), brush_, 1.15f);
     }
@@ -2192,15 +2255,18 @@ private:
     }
 
     void DrawNavItem(const std::wstring& label, const D2D1_RECT_F& rect, bool active) {
-        const bool hover = Contains(rect, mouseX_, mouseY_);
-        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, hover && !active && data_.motionEnabled ? -1.0f : 0.0f);
-        if (active || hover) {
-            DrawElevation(visual, 14, active ? 7.0f : 4.0f, active ? 0.25f : 0.14f);
-            FillRounded(visual, 14, active ? Color(AccentHex(), 0.25f) : Color(0xffffff, 0.085f));
-            DrawGlassHighlight(visual, 14, active ? 1.35f : 0.72f);
-            StrokeRounded(visual, 14, Color(0xffffff, active ? 0.27f : 0.12f));
+        const bool hovered = Contains(rect, mouseX_, mouseY_);
+        const float hover = SmoothedHover(rect, hovered, 0x4e41564947415445ULL);
+        const float visibility = active ? 1.0f : hover;
+        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, active ? 0.0f : -hover);
+        if (visibility > 0.002f) {
+            DrawElevation(visual, 14, 4.0f + 3.0f * visibility, 0.14f + 0.11f * visibility);
+            FillRounded(visual, 14, active ? Color(AccentHex(), 0.25f)
+                                           : Color(0xffffff, 0.085f * visibility));
+            DrawGlassHighlight(visual, 14, 0.52f + 0.83f * visibility);
+            StrokeRounded(visual, 14, Color(0xffffff, 0.06f + 0.21f * visibility));
         }
-        Text(label, visual, formatBodyMedium_, active || hover ? Color(0xffffff) : Color(0x8f95a3),
+        Text(label, visual, formatBodyMedium_, MixColor(Color(0x8f95a3), Color(0xffffff), visibility),
              DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
         if (active) {
             const float shimmer = data_.motionEnabled ? 0.78f + 0.22f * std::sin(AnimationSeconds() * 1.75f) : 1.0f;
@@ -2280,10 +2346,11 @@ private:
     }
 
     void DrawSmallButton(const D2D1_RECT_F& rect, const std::wstring& label) {
-        const bool hover = Contains(rect, mouseX_, mouseY_);
-        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, hover && data_.motionEnabled ? -1.5f : 0.0f);
+        const bool hovered = Contains(rect, mouseX_, mouseY_);
+        const float hover = SmoothedHover(rect, hovered, 0x534d414c4c42544eULL);
+        const D2D1_RECT_F visual = rect;
         DrawLiquidGlass(visual, 11, true);
-        Text(label, visual, formatHeading_, hover ? Color(0xffffff) : Color(0xcbd0dc), DWRITE_TEXT_ALIGNMENT_CENTER,
+        Text(label, visual, formatHeading_, MixColor(Color(0xcbd0dc), Color(0xffffff), hover), DWRITE_TEXT_ALIGNMENT_CENTER,
              DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
     }
 
@@ -2297,36 +2364,40 @@ private:
              D2D1::RectF(rect.left + 14, rect.top + 63, rect.right - 76, rect.bottom - 8),
              formatCaption_, Color(0x7f8695));
         layout_.noRepeatToggle = D2D1::RectF(rect.right - 62, rect.top + 43, rect.right - 16, rect.top + 69);
-        FillRounded(layout_.noRepeatToggle, 13, data_.noRepeat ? Color(AccentHex(), 0.94f) : Color(0xb9c4d9, 0.25f));
+        const float toggleAmount = SmoothedHover(layout_.noRepeatToggle, data_.noRepeat, 0x4e4f524550454154ULL);
+        FillRounded(layout_.noRepeatToggle, 13,
+                    MixColor(Color(0xb9c4d9, 0.25f), Color(AccentHex(), 0.94f), toggleAmount));
         DrawGlassHighlight(layout_.noRepeatToggle, 13, 1.0f);
         StrokeRounded(layout_.noRepeatToggle, 13, Color(0xffffff, 0.28f));
-        const float knobX = data_.noRepeat ? layout_.noRepeatToggle.right - 13 : layout_.noRepeatToggle.left + 13;
+        const float knobX = layout_.noRepeatToggle.left + 13 +
+                            (Width(layout_.noRepeatToggle) - 26) * toggleAmount;
         SetBrush(Color(0xffffff));
         renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(knobX, layout_.noRepeatToggle.top + 13), 9, 9), brush_);
     }
 
     void DrawPrimaryButton(const D2D1_RECT_F& rect) {
-        const bool hover = Contains(rect, mouseX_, mouseY_);
+        const bool hovered = Contains(rect, mouseX_, mouseY_);
+        const float hover = SmoothedHover(rect, hovered, 0x5052494d415259ULL);
         const float pulse = data_.motionEnabled && !drawing_ ? 0.5f + 0.5f * std::sin(AnimationSeconds() * 1.35f) : 0.0f;
-        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, hover && data_.motionEnabled ? -2.0f : 0.0f);
-        DrawElevation(visual, 22, hover ? 18.0f : 13.0f, hover ? 0.48f : 0.36f);
+        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, -2.0f * hover);
+        DrawElevation(visual, 22, 13.0f + 5.0f * hover, 0.36f + 0.12f * hover);
         if (!drawing_) DrawRadialGlow(D2D1::Point2F((visual.left + visual.right) * 0.5f, visual.bottom + 4.0f),
                                       Width(visual) * 0.62f, AccentHex(), 0.07f + pulse * 0.035f);
         ID2D1GradientStopCollection* stops = nullptr;
         ID2D1LinearGradientBrush* gradient = nullptr;
         const D2D1_GRADIENT_STOP gradientStops[] = {
-            {0.0f, Color(drawing_ ? 0x5b6473 : 0xffffff, hover ? 0.40f : 0.28f)},
-            {0.18f, Color(drawing_ ? 0x3f4756 : AccentHex(), hover ? 1.0f : 0.93f)},
-            {0.68f, Color(drawing_ ? 0x303746 : AccentHex(), hover ? 0.86f : 0.72f)},
-            {1.0f, Color(drawing_ ? 0x202632 : 0x142245, hover ? 0.80f : 0.68f)}
+            {0.0f, Color(drawing_ ? 0x5b6473 : 0xffffff, 0.28f + 0.12f * hover)},
+            {0.18f, Color(drawing_ ? 0x3f4756 : AccentHex(), 0.93f + 0.07f * hover)},
+            {0.68f, Color(drawing_ ? 0x303746 : AccentHex(), 0.72f + 0.14f * hover)},
+            {1.0f, Color(drawing_ ? 0x202632 : 0x142245, 0.68f + 0.12f * hover)}
         };
         renderTarget_->CreateGradientStopCollection(gradientStops, 4, &stops);
         if (stops) renderTarget_->CreateLinearGradientBrush(
             D2D1::LinearGradientBrushProperties(D2D1::Point2F(visual.left, visual.top), D2D1::Point2F(visual.right, visual.bottom)),
             stops, &gradient);
         if (gradient) renderTarget_->FillRoundedRectangle(D2D1::RoundedRect(visual, 22, 22), gradient);
-        DrawGlassHighlight(visual, 22, hover ? 1.85f : 1.30f);
-        StrokeRounded(visual, 22, Color(0xffffff, hover ? 0.48f : 0.28f), hover ? 1.5f : 1.0f);
+        DrawGlassHighlight(visual, 22, 1.30f + 0.55f * hover);
+        StrokeRounded(visual, 22, Color(0xffffff, 0.28f + 0.20f * hover), 1.0f + 0.5f * hover);
         const std::wstring label = drawing_ ? L"DRAWING…" : (awaitingConfirmation_ ? L"CONFIRM WINNERS" : L"DRAW WINNERS");
         Text(label, D2D1::RectF(visual.left + 12, visual.top + 24, visual.right - 12, visual.top + 55),
              formatBodyMedium_, Color(0xffffff), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -2733,10 +2804,11 @@ private:
         Text(detail, D2D1::RectF(row.left + 17, row.top + 38, row.right - 90, row.bottom - 10),
              formatCaption_, Color(0x747b88));
         toggle = D2D1::RectF(row.right - 67, row.top + 22, row.right - 17, row.top + 50);
-        FillRounded(toggle, 14, enabled ? Color(AccentHex(), 0.94f) : Color(0xb9c4d9, 0.25f));
+        const float toggleAmount = SmoothedHover(toggle, enabled, 0x544f47474c455345ULL);
+        FillRounded(toggle, 14, MixColor(Color(0xb9c4d9, 0.25f), Color(AccentHex(), 0.94f), toggleAmount));
         DrawGlassHighlight(toggle, 14, 1.0f);
         StrokeRounded(toggle, 14, Color(0xffffff, 0.28f));
-        const float knobX = enabled ? toggle.right - 14 : toggle.left + 14;
+        const float knobX = toggle.left + 14 + (Width(toggle) - 28) * toggleAmount;
         SetBrush(Color(0xffffff));
         renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(knobX, toggle.top + 14), 9.5f, 9.5f), brush_);
     }
@@ -2748,10 +2820,11 @@ private:
              formatBodyMedium_, Color(0xe9ebf1), DWRITE_TEXT_ALIGNMENT_LEADING,
              DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
         toggle = D2D1::RectF(row.right - 62, row.top + 20, row.right - 14, row.top + 48);
-        FillRounded(toggle, 14, enabled ? Color(AccentHex(), 0.94f) : Color(0xb9c4d9, 0.25f));
+        const float toggleAmount = SmoothedHover(toggle, enabled, 0x434f4d5041435454ULL);
+        FillRounded(toggle, 14, MixColor(Color(0xb9c4d9, 0.25f), Color(AccentHex(), 0.94f), toggleAmount));
         DrawGlassHighlight(toggle, 14, 0.85f);
         StrokeRounded(toggle, 14, Color(0xffffff, 0.28f));
-        const float knobX = enabled ? toggle.right - 14 : toggle.left + 14;
+        const float knobX = toggle.left + 14 + (Width(toggle) - 28) * toggleAmount;
         SetBrush(Color(0xffffff));
         renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(knobX, toggle.top + 14), 9.5f, 9.5f), brush_);
     }
@@ -2818,13 +2891,15 @@ private:
         const float sr = settings.right - 20;
         Text(L"SHOW CONTROLS", D2D1::RectF(sx, settings.top + 17, sr, settings.top + 42), formatCaption_, Color(0x7f8695));
         layout_.openPresentationButton = D2D1::RectF(sx, settings.top + 54, sr, settings.top + 108);
-        const bool presentationHover = Contains(layout_.openPresentationButton, mouseX_, mouseY_);
-        DrawElevation(layout_.openPresentationButton, 15, presentationHover ? 13.0f : 9.0f,
-                      presentationHover ? 0.40f : 0.28f);
+        const bool presentationHovered = Contains(layout_.openPresentationButton, mouseX_, mouseY_);
+        const float presentationHover = SmoothedHover(layout_.openPresentationButton, presentationHovered,
+                                                       0x50524553454e5442ULL);
+        DrawElevation(layout_.openPresentationButton, 15, 9.0f + 4.0f * presentationHover,
+                      0.28f + 0.12f * presentationHover);
         FillRounded(layout_.openPresentationButton, 15,
-                    presentationHover ? Color(AccentHex(), 0.95f) : Color(AccentHex(), 0.76f));
-        DrawGlassHighlight(layout_.openPresentationButton, 15, presentationHover ? 1.55f : 1.0f);
-        StrokeRounded(layout_.openPresentationButton, 15, Color(0xffffff, presentationHover ? 0.28f : 0.14f));
+                    Color(AccentHex(), 0.76f + 0.19f * presentationHover));
+        DrawGlassHighlight(layout_.openPresentationButton, 15, 1.0f + 0.55f * presentationHover);
+        StrokeRounded(layout_.openPresentationButton, 15, Color(0xffffff, 0.14f + 0.14f * presentationHover));
         Text(presentationWindow_ ? L"CLOSE AUDIENCE DISPLAY" : L"OPEN AUDIENCE DISPLAY",
              layout_.openPresentationButton, formatBodyMedium_, Color(0xffffff), DWRITE_TEXT_ALIGNMENT_CENTER,
              DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -2927,12 +3002,13 @@ private:
 
     void DrawStatCard(const D2D1_RECT_F& rect, const std::wstring& label,
                       const std::wstring& value, D2D1_COLOR_F tint) {
-        const bool hover = Contains(rect, mouseX_, mouseY_);
-        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, hover && data_.motionEnabled ? -2.0f : 0.0f);
-        DrawElevation(visual, 17, hover ? 12.0f : 8.0f, hover ? 0.34f : 0.24f);
-        FillRounded(visual, 19, D2D1::ColorF(tint.r, tint.g, tint.b, hover ? 0.92f : 0.80f));
-        DrawGlassHighlight(visual, 19, hover ? 1.8f : 1.15f);
-        StrokeRounded(visual, 19, Color(0xffffff, hover ? 0.62f : 0.38f));
+        const bool hovered = Contains(rect, mouseX_, mouseY_);
+        const float hover = SmoothedHover(rect, hovered, 0x5354415443415244ULL);
+        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, -2.0f * hover);
+        DrawElevation(visual, 17, 8.0f + 4.0f * hover, 0.24f + 0.10f * hover);
+        FillRounded(visual, 19, D2D1::ColorF(tint.r, tint.g, tint.b, 0.80f + 0.12f * hover));
+        DrawGlassHighlight(visual, 19, 1.15f + 0.65f * hover);
+        StrokeRounded(visual, 19, Color(0xffffff, 0.38f + 0.24f * hover));
         Text(label, D2D1::RectF(visual.left + 15, visual.top + 12, visual.right - 15, visual.top + 34),
              formatCaption_, Color(0x15171c, 0.62f));
         Text(value, D2D1::RectF(visual.left + 15, visual.top + 34, visual.right - 15, visual.bottom - 9),
@@ -2940,13 +3016,15 @@ private:
     }
 
     void DrawSecondaryButton(const D2D1_RECT_F& rect, const std::wstring& label, bool danger = false) {
-        const bool hover = Contains(rect, mouseX_, mouseY_);
-        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, hover && data_.motionEnabled ? -2.0f : 0.0f);
-        DrawLiquidGlass(visual, 14, true);
-        if (danger && hover) FillRounded(visual, 14, Color(0xff6767, 0.13f));
-        StrokeRounded(visual, 12, danger ? Color(0xff7373, hover ? 0.48f : 0.26f)
-                                        : (hover ? Color(AccentHex(), 0.38f) : Color(0xffffff, 0.10f)));
-        Text(label, visual, formatCaption_, danger ? Color(0xff9b9b) : (hover ? Color(0xffffff) : Color(0xc8cdd8)),
+        const bool hovered = Contains(rect, mouseX_, mouseY_);
+        const float hover = SmoothedHover(rect, hovered, 0x5345434f4e444152ULL);
+        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, -2.0f * hover);
+        DrawLiquidGlass(visual, 14, false);
+        if (danger && hover > 0.002f) FillRounded(visual, 14, Color(0xff6767, 0.13f * hover));
+        StrokeRounded(visual, 12, danger ? Color(0xff7373, 0.26f + 0.22f * hover)
+                                        : MixColor(Color(0xffffff, 0.10f), Color(AccentHex(), 0.38f), hover));
+        Text(label, visual, formatCaption_, danger ? Color(0xff9b9b)
+                                                   : MixColor(Color(0xc8cdd8), Color(0xffffff), hover),
              DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
     }
 

@@ -2,6 +2,16 @@
 
 All notable changes to JAYCEE Lottery are documented here.
 
+## 2.2.1 - 2026-09-02
+
+### Improved
+
+- Animation pacing now uses a high-resolution 8 ms timer and real elapsed time, keeping motion consistent on 60 Hz, 90 Hz, 120 Hz, and 144 Hz displays.
+- Pointer parallax, glass hover, elevation, color, toggle, and scroll responses now interpolate continuously instead of changing as binary visual states.
+- The Liquid Glass renderer avoids repeated gradient allocation for static highlights and creates pointer lens gradients only while a surface is actively hovered.
+- Page, dialog, toast, and control motion uses a gentler spring curve with less overshoot and more natural settling.
+- Audience welcome slides now crossfade and glide between states instead of switching abruptly.
+
 ## 2.2.0 - 2026-09-01
 
 ### Added

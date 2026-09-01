@@ -81,7 +81,7 @@ Use the **Interface Scale** control on the Show page or these shortcuts:
 
 The range is 75% to 135%. When the scaled workspace is taller than the window, a slim scroll indicator appears at the right edge. Use the mouse wheel to move the page with eased inertia. When the pointer is over a long participant, result, or history list, the wheel scrolls that list first.
 
-The **Liquid motion** switch on the Show page pauses continuous parallax, lens response, scroll easing, and transitions while retaining the interface's static depth and hierarchy.
+The **Liquid motion** switch on the Show page pauses continuous parallax, lens response, scroll easing, and transitions while retaining the interface's static depth and hierarchy. Animation timing adapts to the display refresh rate, so the same transitions remain smooth and similarly paced on standard and high-refresh monitors.
 
 ## 7. Review and export results
 
