@@ -2,6 +2,14 @@
 
 All notable changes to JAYCEE Lottery are documented here.
 
+## 2.2.2 - 2026-09-02
+
+### Changed
+
+- Removed the light lens and background parallax that followed the mouse pointer to reduce eye strain and visual distraction.
+- Glass hover feedback remains softly animated without a moving hotspot.
+- Ambient lighting, page transitions, eased scrolling, toggles, slideshow motion, and cinematic reveals remain enabled through **Liquid motion**.
+
 ## 2.2.1 - 2026-09-02
 
 ### Improved

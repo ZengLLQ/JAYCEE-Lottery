@@ -433,8 +433,6 @@ private:
     PresentationPhase presentationPhase_ = PresentationPhase::Idle;
     float mouseX_ = -1000.0f;
     float mouseY_ = -1000.0f;
-    float visualMouseX_ = -1000.0f;
-    float visualMouseY_ = -1000.0f;
     bool mouseTracking_ = false;
     float historyScroll_ = 0.0f;
     float resultScroll_ = 0.0f;
@@ -1565,17 +1563,7 @@ private:
                 lastAnimationTick_ = now;
             }
             if (data_.motionEnabled) {
-                const float pointerBlend = 1.0f - std::exp(-10.5f * frameDeltaSeconds_);
                 const float scrollBlend = 1.0f - std::exp(-11.5f * frameDeltaSeconds_);
-                const float targetX = mouseX_ > -100.0f ? mouseX_ : CanvasSize().width * 0.5f;
-                const float targetY = mouseY_ > -100.0f ? mouseY_ : CanvasSize().height * 0.35f;
-                if (visualMouseX_ < -100.0f) {
-                    visualMouseX_ = targetX;
-                    visualMouseY_ = targetY;
-                } else {
-                    visualMouseX_ += (targetX - visualMouseX_) * pointerBlend;
-                    visualMouseY_ += (targetY - visualMouseY_) * pointerBlend;
-                }
                 pageScroll_ += (pageScrollTarget_ - pageScroll_) * scrollBlend;
                 historyScroll_ += (historyScrollTarget_ - historyScroll_) * scrollBlend;
                 resultScroll_ += (resultScrollTarget_ - resultScroll_) * scrollBlend;
@@ -1585,8 +1573,6 @@ private:
                 historyScroll_ = historyScrollTarget_;
                 resultScroll_ = resultScrollTarget_;
                 participantsScroll_ = participantsScrollTarget_;
-                visualMouseX_ = mouseX_;
-                visualMouseY_ = mouseY_;
             }
             if (drawing_) {
                 const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -1629,10 +1615,6 @@ private:
         mouseX_ = static_cast<float>(pixelX) * dipScale / data_.uiScale;
         mouseY_ = static_cast<float>(pixelY) * dipScale / data_.uiScale +
                   (dialog_ == DialogType::None ? pageScroll_ : 0.0f);
-        if (visualMouseX_ < -100.0f) {
-            visualMouseX_ = mouseX_;
-            visualMouseY_ = mouseY_;
-        }
         const bool overClickable = IsOverClickable(mouseX_, mouseY_);
         SetCursor(LoadCursorW(nullptr, overClickable ? IDC_HAND : IDC_ARROW));
         InvalidateRect(window_, nullptr, FALSE);
@@ -2009,30 +1991,6 @@ private:
         SafeRelease(glass);
         SafeRelease(stops);
 
-        if (hover > 0.004f) {
-            const float lensX = std::clamp(visualMouseX_, visual.left, visual.right);
-            const float lensY = std::clamp(visualMouseY_, visual.top, visual.bottom);
-            ID2D1GradientStopCollection* lensStops = nullptr;
-            ID2D1RadialGradientBrush* lens = nullptr;
-            const float lensAlpha = 0.30f * hover;
-            const D2D1_GRADIENT_STOP lensValues[] = {
-                {0.0f, Color(0xffffff, lensAlpha)},
-                {0.26f, Color(0xffd4b0, lensAlpha * 0.23f)},
-                {0.58f, Color(0x8ac8ff, lensAlpha * 0.10f)},
-                {1.0f, Color(0xffffff, 0.0f)}
-            };
-            if (SUCCEEDED(renderTarget_->CreateGradientStopCollection(lensValues, 4, &lensStops))) {
-                const float lensRadius = std::max(90.0f, std::min(Width(visual), Height(visual)) * 1.55f);
-                renderTarget_->CreateRadialGradientBrush(
-                    D2D1::RadialGradientBrushProperties(D2D1::Point2F(lensX, lensY), D2D1::Point2F(),
-                                                         lensRadius, lensRadius * 0.76f),
-                    lensStops, &lens);
-            }
-            if (lens) renderTarget_->FillRoundedRectangle(D2D1::RoundedRect(visual, radius, radius), lens);
-            SafeRelease(lens);
-            SafeRelease(lensStops);
-        }
-
         const float baseHighlight = thick ? 0.92f : 0.70f;
         DrawGlassHighlight(visual, radius, baseHighlight + (1.35f - baseHighlight) * hover);
         StrokeRounded(visual, radius, Color(0xffffff, 0.22f + 0.20f * hover), 1.0f + 0.35f * hover);
@@ -2092,12 +2050,9 @@ private:
         renderTarget_->SetTransform(D2D1::Matrix3x2F(
             data_.uiScale, 0.0f, 0.0f, data_.uiScale, 0.0f, 0.0f));
         const float contentMouseY = mouseY_;
-        const float contentVisualMouseY = visualMouseY_;
         mouseY_ -= pageScroll_;
-        visualMouseY_ -= pageScroll_;
         DrawHeader();
         mouseY_ = contentMouseY;
-        visualMouseY_ = contentVisualMouseY;
         renderTarget_->SetTransform(D2D1::Matrix3x2F(
             data_.uiScale, 0.0f, 0.0f, data_.uiScale, 0.0f, 0.0f));
         DrawPageScrollIndicator();
@@ -2146,10 +2101,6 @@ private:
     void DrawBackground() {
         const auto size = CanvasSize();
         const float time = data_.motionEnabled ? AnimationSeconds() : 0.0f;
-        const float pointerX = visualMouseX_ > -100.0f
-            ? std::clamp((visualMouseX_ - size.width * 0.5f) / std::max(1.0f, size.width), -0.5f, 0.5f) : 0.0f;
-        const float pointerY = visualMouseY_ > -100.0f
-            ? std::clamp((visualMouseY_ - size.height * 0.5f) / std::max(1.0f, size.height), -0.5f, 0.5f) : 0.0f;
 
         ID2D1GradientStopCollection* stops = nullptr;
         ID2D1LinearGradientBrush* atmosphere = nullptr;
@@ -2168,14 +2119,14 @@ private:
         SafeRelease(atmosphere);
         SafeRelease(stops);
 
-        DrawRadialGlow(D2D1::Point2F(size.width * 0.83f + std::sin(time * 0.13f) * 46.0f + pointerX * 48.0f,
-                                    size.height * 0.16f + std::cos(time * 0.11f) * 24.0f + pointerY * 22.0f),
+        DrawRadialGlow(D2D1::Point2F(size.width * 0.83f + std::sin(time * 0.13f) * 46.0f,
+                                    size.height * 0.16f + std::cos(time * 0.11f) * 24.0f),
                        std::max(430.0f, size.width * 0.36f), 0xff765f, 0.235f);
         DrawRadialGlow(D2D1::Point2F(size.width * 0.68f + std::cos(time * 0.10f) * 35.0f,
                                     size.height * 0.46f + std::sin(time * 0.12f) * 30.0f),
                        std::max(340.0f, size.width * 0.27f), 0xffbd5b, 0.115f);
-        DrawRadialGlow(D2D1::Point2F(size.width * 0.10f + std::cos(time * 0.12f) * 40.0f - pointerX * 36.0f,
-                                    size.height * 0.62f + std::sin(time * 0.14f) * 34.0f - pointerY * 24.0f),
+        DrawRadialGlow(D2D1::Point2F(size.width * 0.10f + std::cos(time * 0.12f) * 40.0f,
+                                    size.height * 0.62f + std::sin(time * 0.14f) * 34.0f),
                        std::max(390.0f, size.width * 0.31f), 0x4b78ff, 0.215f);
         DrawRadialGlow(D2D1::Point2F(size.width * 0.88f + std::sin(time * 0.09f) * 28.0f,
                                     size.height * 0.89f + std::cos(time * 0.10f) * 24.0f),
@@ -2189,7 +2140,7 @@ private:
                 const float x = size.width * static_cast<float>(segment) / 36.0f;
                 const float phase = segment * 0.38f + time * (0.10f + band * 0.016f);
                 const float y = size.height * (0.54f + band * 0.075f) +
-                                std::sin(phase) * (12.0f + band * 4.0f) + pointerY * 12.0f;
+                                std::sin(phase) * (12.0f + band * 4.0f);
                 const D2D1_POINT_2F next = D2D1::Point2F(x, y);
                 renderTarget_->DrawLine(previous, next, brush_, 1.0f + band * 0.35f);
                 previous = next;
@@ -2198,7 +2149,7 @@ private:
 
         for (int index = 0; index < 12; ++index) {
             const float phase = time * (0.12f + index * 0.006f) + index * 1.31f;
-            const float x = size.width * (0.05f + index * 0.082f) + std::sin(phase) * 24.0f + pointerX * (index - 6) * 1.3f;
+            const float x = size.width * (0.05f + index * 0.082f) + std::sin(phase) * 24.0f;
             const float y = 105.0f + std::fmod(index * 79.0f + std::cos(phase * 0.81f) * 30.0f,
                                                std::max(190.0f, size.height - 140.0f));
             const float radius = 1.5f + static_cast<float>(index % 4);
@@ -2911,7 +2862,7 @@ private:
              D2D1::RectF(sx + 14, settings.top + 152, sr - 14, settings.top + 180),
              formatBodyMedium_, Color(0xe8eaf0));
         DrawToggleSetting(D2D1::RectF(sx, settings.top + 198, sr, settings.top + 266),
-                          L"Liquid motion", L"Fluid parallax, specular light, spring transitions, and cinematic reveals.",
+                          L"Liquid motion", L"Ambient glow, spring transitions, eased scrolling, and cinematic reveals.",
                           data_.motionEnabled, layout_.motionToggle);
         const float compactGap = 10.0f;
         const float compactWidth = (sr - sx - compactGap) * 0.5f;

@@ -38,7 +38,7 @@ The release targets 64-bit Windows 10 and Windows 11. The setup executable is no
 - Local draw history with UTF-8 CSV export.
 - Separate audience display with welcome slides, prize preview, countdown, reveal, sound, and confetti.
 - Golden Gate Liquid Glass design with floating navigation, translucent materials, specular edge lighting, and a coral–amber–sky color atmosphere.
-- Four adaptive glass tints and an optional real-time Liquid Motion system with smoothed pointer lensing, ambient light, spring transitions, and cinematic winner reveals.
+- Four adaptive glass tints and an optional real-time Liquid Motion system with ambient light, spring transitions, eased scrolling, and cinematic winner reveals.
 - Interface scaling from 75% to 135% plus inertia-smoothed mouse-wheel scrolling.
 - Local autosave with no server, login, tracking, or internet requirement.
 
@@ -62,7 +62,7 @@ The audience display automatically opens fullscreen on a second monitor when one
 
 ## Motion and accessibility
 
-Liquid Motion is enabled by default and drives the slow atmospheric light field, pointer-responsive glass highlights, spring page changes, and eased scrolling. Version 2.2.1 uses high-resolution, refresh-rate-independent timing so the motion remains consistent on 60 Hz through high-refresh displays. Turn it off on **Show** to keep the complete interface static while preserving all functionality and contrast.
+Liquid Motion is enabled by default and drives the slow atmospheric light field, soft glass hover feedback, spring page changes, and eased scrolling. Version 2.2.2 removes the light that followed the mouse while preserving high-resolution, refresh-rate-independent timing on 60 Hz through high-refresh displays. Turn Liquid Motion off on **Show** to keep the complete interface static while preserving all functionality and contrast.
 
 ## Keyboard and navigation
 
