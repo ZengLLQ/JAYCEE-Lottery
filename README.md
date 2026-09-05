@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  A native Windows lottery studio with a Golden Gate Liquid Glass interface.
+  A native Windows lottery studio with a modern Midnight Command Center interface.
 </p>
 
 <p align="center">
@@ -15,8 +15,6 @@
 </p>
 
 JAYCEE Lottery combines an operator dashboard, participant and prize management, confirmed draw history, CSV reporting, and a separate audience presentation window in one lightweight C++ application. It runs without Python, Qt, a browser runtime, or another interpreter.
-
-![JAYCEE Lottery draw dashboard](docs/images/draw-dashboard.png)
 
 ## Download and install
 
@@ -37,15 +35,17 @@ The release targets 64-bit Windows 10 and Windows 11. The setup executable is no
 - Prize management with default winner counts and group eligibility.
 - Local draw history with UTF-8 CSV export.
 - Separate audience display with welcome slides, prize preview, countdown, reveal, sound, and confetti.
-- Golden Gate Liquid Glass design with floating navigation, translucent materials, specular edge lighting, and a coral–amber–sky color atmosphere.
-- Four adaptive glass tints and an optional real-time Liquid Motion system with ambient light, spring transitions, eased scrolling, and cinematic winner reveals.
+- Midnight Command Center design with near-black surfaces, graphite depth, restrained ambient color, and electric-blue selected blocks.
+- Consistent blue selection feedback across active navigation, focused inputs, chosen prizes, winner cards, dialogs, and primary actions.
+- Optional real-time Liquid Motion with smooth ambient animation, page transitions, eased scrolling, and cinematic winner reveals.
 - Interface scaling from 75% to 135% plus inertia-smoothed mouse-wheel scrolling.
+- Safe zero-based setup: winner, coupon, and prize quantities start at `0`, and drawing stays unavailable until valid values are entered.
 - Local autosave with no server, login, tracking, or internet requirement.
 
 ## Quick start
 
 1. Install the application or launch the portable executable.
-2. On **Draw**, choose the winner count and coupon total.
+2. On **Draw**, set the winner count and coupon total above `0`.
 3. Optional: open **Participants** and import a CSV to display names instead of numbers.
 4. Optional: configure prize names and eligibility on **Prizes**.
 5. Press `Space` or select **Draw Winners**. Review the candidates, then confirm or redraw.
@@ -56,13 +56,11 @@ For complete operating instructions, see the [User Guide](docs/USER_GUIDE.md).
 
 ## Audience experience
 
-![JAYCEE Lottery audience controls](docs/images/audience-controls.png)
-
-The audience display automatically opens fullscreen on a second monitor when one is available. Otherwise, it opens as a resizable preview window. Its sequence includes welcome, next-prize and pool slides, then countdown, draw animation, reveal, and confirmed summary states. Version 2.2 carries the same Golden Gate atmosphere and floating glass language into the projector view.
+The audience display automatically opens fullscreen on a second monitor when one is available. Otherwise, it opens as a resizable preview window. Its sequence includes welcome, next-prize and pool slides, then countdown, draw animation, reveal, and confirmed summary states. Version 3.0 carries the Midnight Command Center palette, blue selection language, and smooth cinematic motion into the projector view.
 
 ## Motion and accessibility
 
-Liquid Motion is enabled by default and drives the slow atmospheric light field, soft glass hover feedback, spring page changes, and eased scrolling. Version 2.2.2 removes the light that followed the mouse while preserving high-resolution, refresh-rate-independent timing on 60 Hz through high-refresh displays. Turn Liquid Motion off on **Show** to keep the complete interface static while preserving all functionality and contrast.
+Liquid Motion is enabled by default and drives the slow atmospheric light field, soft hover feedback, page changes, and eased scrolling. Version 3.0 uses restrained motion with reduced overshoot and no mouse-follow light or pointer parallax. High-resolution, refresh-rate-independent timing keeps the experience consistent from 60 Hz through high-refresh displays. Turn Liquid Motion off on **Show** to keep the complete interface static while preserving all functionality and contrast.
 
 ## Keyboard and navigation
 

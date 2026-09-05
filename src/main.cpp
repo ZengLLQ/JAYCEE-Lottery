@@ -35,6 +35,8 @@ constexpr UINT kDrawDelayMs = 1450;
 constexpr UINT kShowCountdownMs = 3000;
 constexpr int kAppIconResource = 101;
 constexpr float kMinimumCanvasHeight = 760.0f;
+constexpr unsigned kSelectionBlue = 0x2f7bff;
+constexpr unsigned kSelectionBlueLight = 0x76a9ff;
 
 template <typename T>
 void SafeRelease(T*& value) {
@@ -76,7 +78,7 @@ float EaseOutCubic(float value) {
 
 float EaseOutBack(float value) {
     const float t = Saturate(value) - 1.0f;
-    constexpr float overshoot = 0.72f;
+    constexpr float overshoot = 0.28f;
     return 1.0f + (overshoot + 1.0f) * t * t * t + overshoot * t * t;
 }
 
@@ -261,7 +263,7 @@ struct Prize {
     int id{};
     std::wstring name;
     std::wstring eligibleGroup = L"All participants";
-    int winnerCount = 1;
+    int winnerCount = 0;
 };
 
 enum class Page { Draw, Participants, Prizes, Show, History };
@@ -273,8 +275,8 @@ enum class DialogType {
 enum class PresentationPhase { Idle, Countdown, Drawing, Reveal, Summary };
 
 struct PersistentState {
-    int quantity = 1;
-    int total = 180;
+    int quantity = 0;
+    int total = 0;
     bool noRepeat = false;
     std::wstring eventName;
     int themeIndex = 0;
@@ -285,8 +287,8 @@ struct PersistentState {
     int selectedPrize = 0;
     std::unordered_set<int> used;
     std::vector<Participant> participants;
-    std::vector<Prize> prizes{{1, L"General Doorprize", L"All participants", 1},
-                              {2, L"Grand Prize", L"All participants", 1}};
+    std::vector<Prize> prizes{{1, L"General Doorprize", L"All participants", 0},
+                              {2, L"Grand Prize", L"All participants", 0}};
     std::vector<HistoryEntry> history;
 };
 
@@ -603,8 +605,8 @@ private:
             if (parts.empty()) continue;
             try {
                 if (parts[0] == "SETTINGS" && parts.size() >= 4) {
-                    data_.quantity = std::clamp(std::stoi(parts[1]), 1, 999999);
-                    data_.total = std::clamp(std::stoi(parts[2]), 2, 999999);
+                    data_.quantity = std::clamp(std::stoi(parts[1]), 0, 999999);
+                    data_.total = std::clamp(std::stoi(parts[2]), 0, 999999);
                     data_.noRepeat = parts[3] == "1";
                     if (parts.size() >= 9) {
                         data_.eventName = DecodeField(parts[4]);
@@ -635,7 +637,7 @@ private:
                     prize.id = std::stoi(parts[1]);
                     prize.name = DecodeField(parts[2]);
                     prize.eligibleGroup = DecodeField(parts[3]);
-                    prize.winnerCount = std::clamp(std::stoi(parts[4]), 1, 999);
+                    prize.winnerCount = std::clamp(std::stoi(parts[4]), 0, 999);
                     if (!prize.name.empty()) data_.prizes.push_back(std::move(prize));
                 } else if (parts[0] == "HISTORY2" && parts.size() >= 7) {
                     HistoryEntry entry;
@@ -664,7 +666,7 @@ private:
                 }
             } catch (...) {}
         }
-        if (data_.prizes.empty()) data_.prizes.push_back({1, L"General Doorprize", L"All participants", 1});
+        if (data_.prizes.empty()) data_.prizes.push_back({1, L"General Doorprize", L"All participants", 0});
         if (data_.eventName == L"JAYCEE Celebration Night") data_.eventName.clear();
         data_.selectedPrize = std::clamp(data_.selectedPrize, 0, static_cast<int>(data_.prizes.size()) - 1);
         if (!data_.participants.empty()) {
@@ -784,6 +786,15 @@ private:
         if (drawing_ || dialog_ != DialogType::None) return;
         if (awaitingConfirmation_) {
             ShowToast(L"Confirm or redraw the current candidates first");
+            return;
+        }
+        if (PoolSize() < 1) {
+            ShowToast(data_.participants.empty() ? L"Set total coupons above 0 first"
+                                                  : L"Import at least one eligible participant first");
+            return;
+        }
+        if (data_.quantity < 1) {
+            ShowToast(L"Set winners above 0 first");
             return;
         }
         const int available = data_.noRepeat ? RemainingCount() : PoolSize();
@@ -967,7 +978,7 @@ private:
         }
         data_.participants = std::move(imported);
         data_.total = static_cast<int>(data_.participants.size());
-        data_.quantity = std::clamp(data_.quantity, 1, data_.total);
+        data_.quantity = std::clamp(data_.quantity, 0, data_.total);
         ActivePrize().winnerCount = data_.quantity;
         data_.used.clear();
         awaitingConfirmation_ = false;
@@ -1025,9 +1036,11 @@ private:
     }
 
     unsigned AccentHex() const {
-        static constexpr unsigned accents[] = {0xff7867, 0xffb84d, 0x55b9ff, 0xa77bff};
+        static constexpr unsigned accents[] = {0x2f7bff, 0x14b8a6, 0x8b5cf6, 0xf59e0b};
         return accents[std::clamp(data_.themeIndex, 0, 3)];
     }
+
+    unsigned SelectionBlueHex() const { return kSelectionBlue; }
 
     void OpenPresentation() {
         if (presentationWindow_) {
@@ -1124,28 +1137,27 @@ private:
             SafeRelease(localStops);
         };
         auto elevatedCard = [&](const D2D1_RECT_F& rect, float radius, bool featured) {
-            fill(OffsetRectF(ScaleRectF(rect, 1.018f), 0.0f, featured ? 16.0f : 12.0f),
-                 Color(0x01040c, featured ? 0.25f : 0.18f), radius + 7.0f);
-            fill(OffsetRectF(rect, 0.0f, featured ? 7.0f : 5.0f), Color(0x000000, 0.24f), radius + 2.0f);
-            fill(rect, featured ? Color(accentHex, 0.17f) : Color(0xdce9ff, 0.105f), radius);
+            fill(OffsetRectF(rect, 0.0f, featured ? 9.0f : 6.0f), Color(0x000000, 0.34f), radius + 3.0f);
+            fill(rect, featured ? Color(SelectionBlueHex(), 0.72f) : Color(0x141c2a, 0.96f), radius);
             fill(D2D1::RectF(rect.left + 2, rect.top + 2, rect.right - 2, rect.bottom - 2),
-                 Color(0x0b1630, featured ? 0.32f : 0.42f), std::max(1.0f, radius - 2.0f));
-            presentationBrush_->SetColor(featured ? Color(accentHex, 0.80f) : Color(0xffffff, 0.24f));
+                 featured ? Color(0x0d3f99, 0.32f) : Color(0x0a101b, 0.48f),
+                 std::max(1.0f, radius - 2.0f));
+            presentationBrush_->SetColor(featured ? Color(kSelectionBlueLight, 0.88f) : Color(0xffffff, 0.12f));
             presentationTarget_->DrawRoundedRectangle(D2D1::RoundedRect(rect, radius, radius), presentationBrush_,
-                                                      featured ? 1.8f : 1.0f);
-            presentationBrush_->SetColor(Color(0xffffff, featured ? 0.44f : 0.27f));
+                                                      featured ? 1.6f : 1.0f);
+            presentationBrush_->SetColor(Color(0xffffff, featured ? 0.36f : 0.14f));
             presentationTarget_->DrawLine(D2D1::Point2F(rect.left + radius, rect.top + 1),
                                           D2D1::Point2F(rect.right - radius, rect.top + 1),
                                           presentationBrush_, 1.0f);
         };
 
         presentationTarget_->BeginDraw();
-        presentationTarget_->Clear(Color(0x07101f));
+        presentationTarget_->Clear(Color(0x05070d));
         ID2D1GradientStopCollection* stops = nullptr;
         ID2D1LinearGradientBrush* sky = nullptr;
         const D2D1_GRADIENT_STOP skyStops[] = {
-            {0.0f, Color(0x07101f)}, {0.45f, Color(0x101a39)},
-            {0.74f, Color(0x1c1537)}, {1.0f, Color(0x080d18)}};
+            {0.0f, Color(0x05070d)}, {0.48f, Color(0x080d18)},
+            {0.78f, Color(0x0b1220)}, {1.0f, Color(0x05070d)}};
         if (SUCCEEDED(presentationTarget_->CreateGradientStopCollection(skyStops, 4, &stops))) {
             presentationTarget_->CreateLinearGradientBrush(
                 D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, 0), D2D1::Point2F(width, height)),
@@ -1155,36 +1167,32 @@ private:
         SafeRelease(sky);
         SafeRelease(stops);
 
-        radial(D2D1::Point2F(width * 0.82f + std::sin(time * 0.11f) * 50.0f,
-                             height * 0.18f + std::cos(time * 0.09f) * 30.0f),
-               std::max(380.0f, width * 0.34f), 0xff765f, 0.28f);
-        radial(D2D1::Point2F(width * 0.64f + std::cos(time * 0.10f) * 34.0f,
-                             height * 0.57f + std::sin(time * 0.11f) * 28.0f),
-               std::max(300.0f, width * 0.27f), 0xffbd5b, 0.14f);
-        radial(D2D1::Point2F(width * 0.10f + std::cos(time * 0.10f) * 42.0f,
-                             height * 0.68f + std::sin(time * 0.12f) * 30.0f),
-               std::max(370.0f, width * 0.32f), 0x4b78ff, 0.23f);
-        radial(D2D1::Point2F(width * 0.92f, height * 0.90f),
-               std::max(250.0f, width * 0.22f), 0xa36bff, 0.17f);
+        radial(D2D1::Point2F(width * 0.82f + std::sin(time * 0.09f) * 22.0f,
+                             height * 0.18f + std::cos(time * 0.08f) * 16.0f),
+               std::max(400.0f, width * 0.35f), SelectionBlueHex(), 0.19f);
+        radial(D2D1::Point2F(width * 0.14f + std::cos(time * 0.08f) * 18.0f,
+                             height * 0.76f + std::sin(time * 0.10f) * 18.0f),
+               std::max(360.0f, width * 0.30f), 0x0d9488, 0.09f);
+        radial(D2D1::Point2F(width * 0.54f, height * 0.50f + std::sin(time * 0.07f) * 18.0f),
+               std::max(280.0f, width * 0.22f), accentHex, 0.055f);
 
-        for (int band = 0; band < 4; ++band) {
-            presentationBrush_->SetColor(Color(band < 2 ? 0xffa486 : 0x9fc0ff, 0.032f + band * 0.009f));
-            D2D1_POINT_2F previous = D2D1::Point2F(0.0f, height * (0.57f + band * 0.08f));
-            for (int segment = 1; segment <= 44; ++segment) {
-                const float x = width * static_cast<float>(segment) / 44.0f;
-                const float y = height * (0.57f + band * 0.08f) +
-                                std::sin(segment * 0.34f + time * (0.10f + band * 0.014f)) * (14.0f + band * 5.0f);
-                const D2D1_POINT_2F next = D2D1::Point2F(x, y);
-                presentationTarget_->DrawLine(previous, next, presentationBrush_, 1.0f + band * 0.4f);
-                previous = next;
-            }
+        const float grid = 72.0f;
+        const float drift = data_.motionEnabled ? std::fmod(time * 2.5f, grid) : 0.0f;
+        presentationBrush_->SetColor(Color(0x8aa9d6, 0.026f));
+        for (float x = -grid + drift; x < width + grid; x += grid) {
+            presentationTarget_->DrawLine(D2D1::Point2F(x, 72.0f), D2D1::Point2F(x, height), presentationBrush_, 0.7f);
+        }
+        for (float y = 72.0f + drift; y < height + grid; y += grid) {
+            presentationTarget_->DrawLine(D2D1::Point2F(0.0f, y), D2D1::Point2F(width, y), presentationBrush_, 0.7f);
         }
 
         const D2D1_RECT_F audienceBar = D2D1::RectF(24, 13, width - 24, 63);
-        fill(OffsetRectF(audienceBar, 0, 7), Color(0x000000, 0.22f), 22);
-        fill(audienceBar, Color(0xdce9ff, 0.105f), 22);
-        presentationBrush_->SetColor(Color(0xffffff, 0.30f));
-        presentationTarget_->DrawRoundedRectangle(D2D1::RoundedRect(audienceBar, 22, 22), presentationBrush_, 1.0f);
+        fill(OffsetRectF(audienceBar, 0, 6), Color(0x000000, 0.32f), 18);
+        fill(audienceBar, Color(0x101827, 0.96f), 18);
+        fill(D2D1::RectF(audienceBar.left, audienceBar.top, audienceBar.left + 5, audienceBar.bottom),
+             Color(SelectionBlueHex(), 0.94f), 2);
+        presentationBrush_->SetColor(Color(0xffffff, 0.12f));
+        presentationTarget_->DrawRoundedRectangle(D2D1::RoundedRect(audienceBar, 18, 18), presentationBrush_, 1.0f);
         presentationTarget_->DrawLine(D2D1::Point2F(audienceBar.left + 22, audienceBar.top + 1),
                                       D2D1::Point2F(audienceBar.right - 22, audienceBar.top + 1), presentationBrush_, 1.0f);
         text(L"JAYCEE LOTTERY", D2D1::RectF(44, 13, 276, 63), formatBodyMedium_, Color(0xf7f8fb),
@@ -1372,10 +1380,10 @@ private:
             try {
                 int value = std::stoi(inputBuffer_);
                 if (activeInput_ == InputField::Quantity) {
-                    data_.quantity = std::clamp(value, 1, std::max(1, PoolSize()));
+                    data_.quantity = std::clamp(value, 0, std::max(0, PoolSize()));
                     ActivePrize().winnerCount = data_.quantity;
                 } else {
-                    data_.total = std::clamp(value, 2, 999999);
+                    data_.total = std::clamp(value, 0, 999999);
                     data_.quantity = std::min(data_.quantity, data_.total);
                     ActivePrize().winnerCount = data_.quantity;
                 }
@@ -1391,14 +1399,14 @@ private:
     void AdjustValue(InputField field, int amount) {
         CommitInput();
         if (field == InputField::Quantity) {
-            data_.quantity = std::clamp(data_.quantity + amount, 1, std::max(1, PoolSize()));
+            data_.quantity = std::clamp(data_.quantity + amount, 0, std::max(0, PoolSize()));
             ActivePrize().winnerCount = data_.quantity;
         } else {
             if (!data_.participants.empty()) {
                 ShowToast(L"Participant import controls the pool size");
                 return;
             }
-            data_.total = std::clamp(data_.total + amount, 2, 999999);
+            data_.total = std::clamp(data_.total + amount, 0, 999999);
             data_.quantity = std::min(data_.quantity, data_.total);
             ActivePrize().winnerCount = data_.quantity;
         }
@@ -1466,8 +1474,8 @@ private:
         } else if (dialog_ == DialogType::ClearParticipants) {
             data_.participants.clear();
             data_.used.clear();
-            data_.total = 180;
-            data_.quantity = std::min(data_.quantity, data_.total);
+            data_.total = 0;
+            data_.quantity = 0;
             ActivePrize().winnerCount = data_.quantity;
             latestNumbers_.clear();
             pendingWinners_.clear();
@@ -1480,7 +1488,7 @@ private:
                 dialogPrizeIndex_ < static_cast<int>(data_.prizes.size())) {
                 data_.prizes.erase(data_.prizes.begin() + dialogPrizeIndex_);
                 data_.selectedPrize = std::clamp(data_.selectedPrize, 0, static_cast<int>(data_.prizes.size()) - 1);
-                data_.quantity = std::clamp(ActivePrize().winnerCount, 1, std::max(1, PoolSize()));
+                data_.quantity = std::clamp(ActivePrize().winnerCount, 0, std::max(0, PoolSize()));
                 SaveState();
                 ShowToast(L"Prize removed");
             }
@@ -1493,9 +1501,9 @@ private:
             } else if (dialog_ == DialogType::AddPrize) {
                 int nextId = 1;
                 for (const auto& prize : data_.prizes) nextId = std::max(nextId, prize.id + 1);
-                data_.prizes.push_back({nextId, dialogText_, L"All participants", 1});
+                data_.prizes.push_back({nextId, dialogText_, L"All participants", 0});
                 data_.selectedPrize = static_cast<int>(data_.prizes.size()) - 1;
-                data_.quantity = 1;
+                data_.quantity = 0;
                 ShowToast(L"Prize added");
             } else if (dialogPrizeIndex_ >= 0 && dialogPrizeIndex_ < static_cast<int>(data_.prizes.size())) {
                 data_.prizes[static_cast<size_t>(dialogPrizeIndex_)].name = dialogText_;
@@ -1724,7 +1732,7 @@ private:
                 for (size_t index = 0; index < std::size(layout_.prizeCards); ++index) {
                     if (!Contains(layout_.prizeCards[index], x, y) || index >= data_.prizes.size()) continue;
                     data_.selectedPrize = static_cast<int>(index);
-                    data_.quantity = std::clamp(data_.prizes[index].winnerCount, 1, std::max(1, PoolSize()));
+                    data_.quantity = std::clamp(data_.prizes[index].winnerCount, 0, std::max(0, PoolSize()));
                     SaveState();
                     ShowToast(L"Active prize · " + data_.prizes[index].name);
                     break;
@@ -1931,7 +1939,7 @@ private:
         const std::uint64_t key = RectAnimationKey(rect, salt);
         if (hoverAnimations_.size() > 512 && !hoverAnimations_.contains(key)) hoverAnimations_.clear();
         float& amount = hoverAnimations_[key];
-        const float response = hovered ? 18.0f : 12.0f;
+        const float response = hovered ? 13.0f : 9.0f;
         const float blend = 1.0f - std::exp(-response * frameDeltaSeconds_);
         amount += ((hovered ? 1.0f : 0.0f) - amount) * blend;
         if (amount < 0.001f) amount = 0.0f;
@@ -1941,25 +1949,33 @@ private:
 
     void DrawElevation(const D2D1_RECT_F& rect, float radius, float elevation = 10.0f, float opacity = 0.28f) {
         const float depth = data_.motionEnabled ? elevation : elevation * 0.55f;
-        FillRounded(OffsetRectF(ScaleRectF(rect, 1.020f), 0.0f, depth * 1.10f), radius + 8.0f,
-                    Color(0x020817, opacity * 0.14f));
-        FillRounded(OffsetRectF(ScaleRectF(rect, 1.010f), 0.0f, depth * 0.66f), radius + 4.0f,
-                    Color(0x02050c, opacity * 0.28f));
-        FillRounded(OffsetRectF(rect, 0.0f, depth * 0.28f), radius + 1.0f,
-                    Color(0x000000, opacity * 0.34f));
+        FillRounded(OffsetRectF(ScaleRectF(rect, 1.010f), 0.0f, depth * 0.78f), radius + 5.0f,
+                    Color(0x01040b, opacity * 0.34f));
+        FillRounded(OffsetRectF(rect, 0.0f, depth * 0.30f), radius + 1.0f,
+                    Color(0x000000, opacity * 0.55f));
     }
 
     void DrawGlassHighlight(const D2D1_RECT_F& rect, float radius, float intensity = 1.0f) {
-        FillRounded(rect, radius, Color(0xffffff, 0.012f * intensity));
-        SetBrush(Color(0xffffff, 0.20f * intensity));
+        SetBrush(Color(0xffffff, 0.12f * intensity));
         renderTarget_->DrawLine(D2D1::Point2F(rect.left + radius, rect.top + 1.0f),
                                 D2D1::Point2F(rect.right - radius, rect.top + 1.0f), brush_, 1.0f);
-        SetBrush(Color(0xffffff, 0.075f * intensity));
+        SetBrush(Color(0xffffff, 0.035f * intensity));
         renderTarget_->DrawLine(D2D1::Point2F(rect.left + 1.0f, rect.top + radius),
                                 D2D1::Point2F(rect.left + 1.0f, rect.bottom - radius), brush_, 0.8f);
-        SetBrush(Color(AccentHex(), 0.055f * intensity));
-        renderTarget_->DrawLine(D2D1::Point2F(rect.left + radius, rect.bottom - 1.0f),
-                                D2D1::Point2F(rect.right - radius, rect.bottom - 1.0f), brush_, 0.8f);
+    }
+
+    void DrawSelectionBlock(const D2D1_RECT_F& rect, float radius, float amount = 1.0f) {
+        const float selected = Saturate(amount);
+        if (selected <= 0.002f) return;
+        DrawElevation(rect, radius, 8.0f + 4.0f * selected, 0.32f * selected);
+        FillRounded(rect, radius, Color(SelectionBlueHex(), 0.80f * selected));
+        FillRounded(D2D1::RectF(rect.left + 1.0f, rect.top + 1.0f,
+                                rect.right - 1.0f, rect.bottom - 1.0f),
+                    std::max(1.0f, radius - 1.0f), Color(0x0d3f99, 0.30f * selected));
+        SetBrush(Color(0xa8c9ff, 0.72f * selected));
+        renderTarget_->DrawLine(D2D1::Point2F(rect.left + radius, rect.top + 1.0f),
+                                D2D1::Point2F(rect.right - radius, rect.top + 1.0f), brush_, 1.0f);
+        StrokeRounded(rect, radius, Color(kSelectionBlueLight, 0.72f * selected), 1.0f);
     }
 
     void DrawLiquidGlass(const D2D1_RECT_F& rect, float radius, bool interactive = false,
@@ -1967,21 +1983,20 @@ private:
         const bool hovered = interactive && dialog_ == DialogType::None && Contains(rect, mouseX_, mouseY_);
         const float hover = interactive ? SmoothedHover(rect, hovered, 0x4c4951554944474cULL) : 0.0f;
         const D2D1_RECT_F visual = rect;
-        const float baseElevation = thick ? 12.0f : 8.0f;
-        const float baseOpacity = thick ? 0.34f : 0.24f;
-        DrawElevation(visual, radius, baseElevation + (15.0f - baseElevation) * hover,
-                      baseOpacity + (0.44f - baseOpacity) * hover);
+        const float baseElevation = thick ? 9.0f : 6.0f;
+        const float baseOpacity = thick ? 0.30f : 0.20f;
+        DrawElevation(visual, radius, baseElevation + 3.0f * hover,
+                      baseOpacity + 0.08f * hover);
 
         ID2D1GradientStopCollection* stops = nullptr;
         ID2D1LinearGradientBrush* glass = nullptr;
-        const float density = thick ? 1.0f : 0.72f;
+        const float density = thick ? 1.0f : 0.82f;
         const D2D1_GRADIENT_STOP glassStops[] = {
-            {0.0f, Color(0xffffff, (0.155f + 0.050f * hover) * density)},
-            {0.28f, Color(0xdde9ff, 0.090f * density)},
-            {0.62f, Color(AccentHex(), (0.046f + 0.029f * hover) * density)},
-            {1.0f, Color(0x081326, (thick ? 0.46f : 0.34f))}
+            {0.0f, Color(0x1b2435, (0.94f + 0.04f * hover) * density)},
+            {0.48f, Color(0x111827, 0.94f * density)},
+            {1.0f, Color(0x090e19, thick ? 0.98f : 0.94f)}
         };
-        if (SUCCEEDED(renderTarget_->CreateGradientStopCollection(glassStops, 4, &stops))) {
+        if (SUCCEEDED(renderTarget_->CreateGradientStopCollection(glassStops, 3, &stops))) {
             renderTarget_->CreateLinearGradientBrush(
                 D2D1::LinearGradientBrushProperties(D2D1::Point2F(visual.left, visual.top),
                                                      D2D1::Point2F(visual.right, visual.bottom)),
@@ -1991,15 +2006,11 @@ private:
         SafeRelease(glass);
         SafeRelease(stops);
 
-        const float baseHighlight = thick ? 0.92f : 0.70f;
-        DrawGlassHighlight(visual, radius, baseHighlight + (1.35f - baseHighlight) * hover);
-        StrokeRounded(visual, radius, Color(0xffffff, 0.22f + 0.20f * hover), 1.0f + 0.35f * hover);
-        StrokeRounded(D2D1::RectF(visual.left + 1.5f, visual.top + 1.5f,
-                                  visual.right - 1.5f, visual.bottom - 1.5f),
-                      std::max(1.0f, radius - 1.5f), Color(0x9bc5ff, 0.055f + 0.065f * hover), 0.8f);
-        SetBrush(Color(0xffffff, 0.19f + 0.15f * hover));
-        renderTarget_->DrawLine(D2D1::Point2F(visual.left + radius, visual.top + 1.0f),
-                                D2D1::Point2F(visual.right - radius, visual.top + 1.0f), brush_, 1.15f);
+        const float baseHighlight = thick ? 0.82f : 0.58f;
+        DrawGlassHighlight(visual, radius, baseHighlight + 0.34f * hover);
+        StrokeRounded(visual, radius,
+                      MixColor(Color(0xffffff, 0.085f), Color(SelectionBlueHex(), 0.34f), hover),
+                      1.0f);
     }
 
     void DrawRadialGlow(D2D1_POINT_2F center, float radius, unsigned color, float alpha) {
@@ -2029,7 +2040,7 @@ private:
         }
 
         renderTarget_->BeginDraw();
-        renderTarget_->Clear(Color(0x07101f));
+        renderTarget_->Clear(Color(0x05070d));
 
         pageScrollTarget_ = std::clamp(pageScrollTarget_, 0.0f, MaxPageScroll());
         pageScroll_ = std::clamp(pageScroll_, 0.0f, MaxPageScroll());
@@ -2037,8 +2048,8 @@ private:
             data_.uiScale, 0.0f, 0.0f, data_.uiScale, 0.0f, 0.0f));
 
         DrawBackground();
-        const float pageEase = EaseInOutSine(MotionProgress(pageTransitionStarted_, 560.0f));
-        const float pageOffset = (1.0f - pageEase) * 34.0f;
+        const float pageEase = EaseOutCubic(MotionProgress(pageTransitionStarted_, 440.0f));
+        const float pageOffset = (1.0f - pageEase) * 20.0f;
         renderTarget_->SetTransform(D2D1::Matrix3x2F(
             data_.uiScale, 0.0f, 0.0f, data_.uiScale, pageOffset * data_.uiScale,
             -pageScroll_ * data_.uiScale));
@@ -2095,7 +2106,7 @@ private:
         FillRounded(D2D1::RectF(viewport.width - 8.0f, top, viewport.width - 4.0f, bottom), 2,
                     Color(0xffffff, 0.07f));
         FillRounded(D2D1::RectF(viewport.width - 8.0f, thumbTop, viewport.width - 4.0f,
-                                thumbTop + thumbHeight), 2, Color(AccentHex(), 0.72f));
+                                thumbTop + thumbHeight), 2, Color(SelectionBlueHex(), 0.86f));
     }
 
     void DrawBackground() {
@@ -2105,10 +2116,10 @@ private:
         ID2D1GradientStopCollection* stops = nullptr;
         ID2D1LinearGradientBrush* atmosphere = nullptr;
         const D2D1_GRADIENT_STOP atmosphereStops[] = {
-            {0.0f, Color(0x07101f)},
-            {0.42f, Color(0x0b1630)},
-            {0.72f, Color(0x15142d)},
-            {1.0f, Color(0x080d18)}
+            {0.0f, Color(0x05070d)},
+            {0.48f, Color(0x080d18)},
+            {0.78f, Color(0x0b1220)},
+            {1.0f, Color(0x05070d)}
         };
         if (SUCCEEDED(renderTarget_->CreateGradientStopCollection(atmosphereStops, 4, &stops))) {
             renderTarget_->CreateLinearGradientBrush(
@@ -2119,44 +2130,34 @@ private:
         SafeRelease(atmosphere);
         SafeRelease(stops);
 
-        DrawRadialGlow(D2D1::Point2F(size.width * 0.83f + std::sin(time * 0.13f) * 46.0f,
-                                    size.height * 0.16f + std::cos(time * 0.11f) * 24.0f),
-                       std::max(430.0f, size.width * 0.36f), 0xff765f, 0.235f);
-        DrawRadialGlow(D2D1::Point2F(size.width * 0.68f + std::cos(time * 0.10f) * 35.0f,
-                                    size.height * 0.46f + std::sin(time * 0.12f) * 30.0f),
-                       std::max(340.0f, size.width * 0.27f), 0xffbd5b, 0.115f);
-        DrawRadialGlow(D2D1::Point2F(size.width * 0.10f + std::cos(time * 0.12f) * 40.0f,
-                                    size.height * 0.62f + std::sin(time * 0.14f) * 34.0f),
-                       std::max(390.0f, size.width * 0.31f), 0x4b78ff, 0.215f);
-        DrawRadialGlow(D2D1::Point2F(size.width * 0.88f + std::sin(time * 0.09f) * 28.0f,
-                                    size.height * 0.89f + std::cos(time * 0.10f) * 24.0f),
-                       std::max(280.0f, size.width * 0.22f), 0xa36bff, 0.155f);
+        DrawRadialGlow(D2D1::Point2F(size.width * 0.82f + std::sin(time * 0.10f) * 24.0f,
+                                    size.height * 0.12f + std::cos(time * 0.09f) * 16.0f),
+                       std::max(440.0f, size.width * 0.35f), SelectionBlueHex(), 0.15f);
+        DrawRadialGlow(D2D1::Point2F(size.width * 0.16f + std::cos(time * 0.08f) * 18.0f,
+                                    size.height * 0.82f + std::sin(time * 0.10f) * 18.0f),
+                       std::max(380.0f, size.width * 0.29f), 0x0d9488, 0.08f);
+        DrawRadialGlow(D2D1::Point2F(size.width * 0.55f,
+                                    size.height * 0.48f + std::sin(time * 0.07f) * 20.0f),
+                       std::max(300.0f, size.width * 0.23f), AccentHex(), 0.055f);
 
-        for (int band = 0; band < 4; ++band) {
-            const unsigned bandColor = band == 0 ? 0xff9f7e : (band == 1 ? 0x75a8ff : 0xffffff);
-            SetBrush(Color(bandColor, 0.025f + band * 0.008f));
-            D2D1_POINT_2F previous = D2D1::Point2F(0.0f, size.height * (0.54f + band * 0.075f));
-            for (int segment = 1; segment <= 36; ++segment) {
-                const float x = size.width * static_cast<float>(segment) / 36.0f;
-                const float phase = segment * 0.38f + time * (0.10f + band * 0.016f);
-                const float y = size.height * (0.54f + band * 0.075f) +
-                                std::sin(phase) * (12.0f + band * 4.0f);
-                const D2D1_POINT_2F next = D2D1::Point2F(x, y);
-                renderTarget_->DrawLine(previous, next, brush_, 1.0f + band * 0.35f);
-                previous = next;
-            }
+        const float grid = 64.0f;
+        const float drift = data_.motionEnabled ? std::fmod(time * 3.0f, grid) : 0.0f;
+        SetBrush(Color(0x8aa9d6, 0.028f));
+        for (float x = -grid + drift; x < size.width + grid; x += grid) {
+            renderTarget_->DrawLine(D2D1::Point2F(x, 86.0f), D2D1::Point2F(x, size.height), brush_, 0.7f);
+        }
+        for (float y = 86.0f + drift; y < size.height + grid; y += grid) {
+            renderTarget_->DrawLine(D2D1::Point2F(0.0f, y), D2D1::Point2F(size.width, y), brush_, 0.7f);
         }
 
-        for (int index = 0; index < 12; ++index) {
-            const float phase = time * (0.12f + index * 0.006f) + index * 1.31f;
-            const float x = size.width * (0.05f + index * 0.082f) + std::sin(phase) * 24.0f;
-            const float y = 105.0f + std::fmod(index * 79.0f + std::cos(phase * 0.81f) * 30.0f,
-                                               std::max(190.0f, size.height - 140.0f));
-            const float radius = 1.5f + static_cast<float>(index % 4);
-            SetBrush(Color(index % 3 == 0 ? 0xffbe8d : (index % 3 == 1 ? 0x8fb7ff : 0xffffff), 0.13f));
+        for (int index = 0; index < 8; ++index) {
+            const float phase = time * (0.10f + index * 0.005f) + index * 1.47f;
+            const float x = size.width * (0.08f + index * 0.12f) + std::sin(phase) * 12.0f;
+            const float y = 118.0f + std::fmod(index * 93.0f + std::cos(phase) * 14.0f,
+                                               std::max(190.0f, size.height - 150.0f));
+            const float radius = 1.2f + static_cast<float>(index % 3);
+            SetBrush(Color(index % 2 == 0 ? SelectionBlueHex() : 0xffffff, 0.11f));
             renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), radius, radius), brush_);
-            SetBrush(Color(0xffffff, 0.10f));
-            renderTarget_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), radius + 4.0f, radius + 4.0f), brush_, 0.7f);
         }
     }
 
@@ -2165,39 +2166,38 @@ private:
     void DrawHeader() {
         const auto size = CanvasSize();
         const float margin = ContentMargin(size.width);
-        const D2D1_RECT_F glassBar = D2D1::RectF(margin - 10.0f, 9.0f, size.width - margin + 10.0f, 65.0f);
-        DrawLiquidGlass(glassBar, 23.0f, false, true);
+        const D2D1_RECT_F glassBar = D2D1::RectF(margin - 8.0f, 11.0f, size.width - margin + 8.0f, 69.0f);
+        DrawLiquidGlass(glassBar, 19.0f, false, true);
+        FillRounded(D2D1::RectF(glassBar.left + 1.0f, glassBar.top + 1.0f,
+                                glassBar.left + 5.0f, glassBar.bottom - 1.0f),
+                    2.0f, Color(SelectionBlueHex(), 0.92f));
 
-        const D2D1_RECT_F logo = D2D1::RectF(margin, 19, margin + 34, 53);
-        DrawRadialGlow(D2D1::Point2F((logo.left + logo.right) * 0.5f, (logo.top + logo.bottom) * 0.5f),
-                       46.0f, AccentHex(), 0.16f);
-        DrawElevation(logo, 10, 7.0f, 0.28f);
-        FillRounded(logo, 10, Color(AccentHex(), 0.88f));
-        DrawGlassHighlight(logo, 10, 1.45f);
-        StrokeRounded(logo, 10, Color(0xffffff, 0.48f));
+        const D2D1_RECT_F logo = D2D1::RectF(margin + 4, 22, margin + 38, 56);
+        DrawSelectionBlock(logo, 9.0f);
         Text(L"J", logo, formatHeading_, Color(0xffffff), DWRITE_TEXT_ALIGNMENT_CENTER,
              DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-        Text(L"JAYCEE LOTTERY", D2D1::RectF(margin + 47, 20, margin + 190, 52), formatBodyMedium_,
+        Text(L"JAYCEE LOTTERY", D2D1::RectF(margin + 51, 21, margin + 194, 55), formatBodyMedium_,
              Color(0xf7f8fb), DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 
-        layout_.drawNav = D2D1::RectF(margin + 205, 17, margin + 277, 55);
-        layout_.participantsNav = D2D1::RectF(margin + 283, 17, margin + 391, 55);
-        layout_.prizesNav = D2D1::RectF(margin + 397, 17, margin + 481, 55);
-        layout_.showNav = D2D1::RectF(margin + 487, 17, margin + 561, 55);
-        layout_.historyNav = D2D1::RectF(margin + 567, 17, margin + 657, 55);
+        layout_.drawNav = D2D1::RectF(margin + 208, 20, margin + 282, 60);
+        layout_.participantsNav = D2D1::RectF(margin + 288, 20, margin + 400, 60);
+        layout_.prizesNav = D2D1::RectF(margin + 406, 20, margin + 492, 60);
+        layout_.showNav = D2D1::RectF(margin + 498, 20, margin + 574, 60);
+        layout_.historyNav = D2D1::RectF(margin + 580, 20, margin + 672, 60);
         DrawNavItem(L"Draw", layout_.drawNav, page_ == Page::Draw);
         DrawNavItem(L"Participants", layout_.participantsNav, page_ == Page::Participants);
         DrawNavItem(L"Prizes", layout_.prizesNav, page_ == Page::Prizes);
         DrawNavItem(L"Show", layout_.showNav, page_ == Page::Show);
         DrawNavItem(L"History", layout_.historyNav, page_ == Page::History);
 
-        layout_.fullScreenButton = D2D1::RectF(size.width - margin - 48, 16, size.width - margin, 56);
-        DrawLiquidGlass(layout_.fullScreenButton, 14, true);
+        layout_.fullScreenButton = D2D1::RectF(size.width - margin - 46, 20, size.width - margin - 2, 60);
+        DrawLiquidGlass(layout_.fullScreenButton, 12, true);
         Text(L"↗", layout_.fullScreenButton, formatHeading_, Color(0xe8eaf2),
              DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 
-        const D2D1_RECT_F status = D2D1::RectF(size.width - margin - 176, 20, size.width - margin - 60, 52);
-        DrawLiquidGlass(status, 16, false);
+        const D2D1_RECT_F status = D2D1::RectF(size.width - margin - 174, 23, size.width - margin - 56, 57);
+        FillRounded(status, 11.0f, Color(0x0b1220, 0.94f));
+        StrokeRounded(status, 11.0f, Color(0xffffff, 0.08f));
         SetBrush(Color(presentationWindow_ ? 0x65e09c : 0x7f8796));
         renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(status.left + 16, 36), 3.5f, 3.5f), brush_);
         Text(presentationWindow_ ? L"AUDIENCE LIVE" : L"READY · LOCAL",
@@ -2208,22 +2208,15 @@ private:
     void DrawNavItem(const std::wstring& label, const D2D1_RECT_F& rect, bool active) {
         const bool hovered = Contains(rect, mouseX_, mouseY_);
         const float hover = SmoothedHover(rect, hovered, 0x4e41564947415445ULL);
-        const float visibility = active ? 1.0f : hover;
-        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, active ? 0.0f : -hover);
-        if (visibility > 0.002f) {
-            DrawElevation(visual, 14, 4.0f + 3.0f * visibility, 0.14f + 0.11f * visibility);
-            FillRounded(visual, 14, active ? Color(AccentHex(), 0.25f)
-                                           : Color(0xffffff, 0.085f * visibility));
-            DrawGlassHighlight(visual, 14, 0.52f + 0.83f * visibility);
-            StrokeRounded(visual, 14, Color(0xffffff, 0.06f + 0.21f * visibility));
+        const float selected = SmoothedHover(rect, active, 0x53454c4543544e56ULL);
+        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, -hover * 0.8f);
+        if (selected > 0.002f) DrawSelectionBlock(visual, 11.0f, selected);
+        if (!active && hover > 0.002f) {
+            FillRounded(visual, 11.0f, Color(0xffffff, 0.07f * hover));
+            StrokeRounded(visual, 11.0f, Color(0xffffff, 0.10f * hover));
         }
-        Text(label, visual, formatBodyMedium_, MixColor(Color(0x8f95a3), Color(0xffffff), visibility),
+        Text(label, visual, formatBodyMedium_, MixColor(Color(0x8791a4), Color(0xffffff), std::max(hover, selected)),
              DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-        if (active) {
-            const float shimmer = data_.motionEnabled ? 0.78f + 0.22f * std::sin(AnimationSeconds() * 1.75f) : 1.0f;
-            FillRounded(D2D1::RectF(visual.left + 25, visual.bottom - 2.4f, visual.right - 25, visual.bottom - 0.8f), 1,
-                        Color(0xffffff, shimmer));
-        }
     }
 
     void DrawDrawPage() {
@@ -2231,14 +2224,22 @@ private:
         const float margin = ContentMargin(size.width);
         const float contentWidth = size.width - 2.0f * margin;
 
-        Text(L"ACTIVE PRIZE · " + ActivePrize().name, D2D1::RectF(margin, 91, size.width - margin, 112),
-             formatCaption_, Color(AccentHex()));
+        Text(L"LIVE DRAW", D2D1::RectF(margin, 91, margin + 180, 112),
+             formatCaption_, Color(SelectionBlueHex()));
+        Text(L"Draw studio.", D2D1::RectF(margin, 113, margin + 360, 151),
+             formatTitle_, Color(0xf7f9fc));
+        const D2D1_RECT_F activePrize = D2D1::RectF(margin + 205, 116, size.width - margin, 148);
+        FillRounded(activePrize, 10.0f, Color(SelectionBlueHex(), 0.11f));
+        StrokeRounded(activePrize, 10.0f, Color(SelectionBlueHex(), 0.25f));
+        Text(L"ACTIVE PRIZE  ·  " + ActivePrize().name, D2D1::RectF(activePrize.left + 12, activePrize.top,
+             activePrize.right - 12, activePrize.bottom), formatCaption_, Color(kSelectionBlueLight),
+             DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
         Text(data_.participants.empty()
-                 ? L"Numeric coupon mode · Import a CSV when you are ready to reveal participant names."
-                 : std::to_wstring(data_.participants.size()) + L" participants loaded · Winner names will appear on the audience display.",
-             D2D1::RectF(margin, 121, size.width - margin, 148), formatBody_, Color(0x8f95a3));
+                 ? L"Start from zero. Set the winner count and coupon pool, then launch a secure draw."
+                 : std::to_wstring(data_.participants.size()) + L" participants loaded · Names are ready for the audience display.",
+             D2D1::RectF(margin, 151, size.width - margin, 177), formatBody_, Color(0x8b96a9));
 
-        const D2D1_RECT_F controlCard = D2D1::RectF(margin, 160, size.width - margin, 300);
+        const D2D1_RECT_F controlCard = D2D1::RectF(margin, 188, size.width - margin, 330);
         DrawSurface(controlCard, 20);
 
         const float innerLeft = controlCard.left + 22.0f;
@@ -2249,10 +2250,10 @@ private:
         const float gap = 14.0f;
         const float buttonWidth = std::clamp(available * 0.195f, 205.0f, 250.0f);
 
-        D2D1_RECT_F quantity = D2D1::RectF(innerLeft, 180, innerLeft + stepWidth, 280);
-        D2D1_RECT_F total = D2D1::RectF(quantity.right + gap, 180, quantity.right + gap + stepWidth, 280);
-        D2D1_RECT_F toggle = D2D1::RectF(total.right + gap, 180, total.right + gap + toggleWidth, 280);
-        layout_.drawButton = D2D1::RectF(innerRight - buttonWidth, 180, innerRight, 280);
+        D2D1_RECT_F quantity = D2D1::RectF(innerLeft, 208, innerLeft + stepWidth, 310);
+        D2D1_RECT_F total = D2D1::RectF(quantity.right + gap, 208, quantity.right + gap + stepWidth, 310);
+        D2D1_RECT_F toggle = D2D1::RectF(total.right + gap, 208, total.right + gap + toggleWidth, 310);
+        layout_.drawButton = D2D1::RectF(innerRight - buttonWidth, 208, innerRight, 310);
 
         DrawStepper(quantity, L"WINNERS", data_.quantity, InputField::Quantity,
                     layout_.quantityMinus, layout_.quantityValue, layout_.quantityPlus);
@@ -2261,7 +2262,7 @@ private:
         DrawNoRepeat(toggle);
         DrawPrimaryButton(layout_.drawButton);
 
-        const float mainTop = 320.0f;
+        const float mainTop = 350.0f;
         const float bottom = size.height - 28.0f;
         const float rightWidth = std::clamp(contentWidth * 0.30f, 330.0f, 450.0f);
         const float mainGap = 18.0f;
@@ -2282,16 +2283,17 @@ private:
     void DrawStepper(const D2D1_RECT_F& rect, const std::wstring& label, int value, InputField field,
                      D2D1_RECT_F& minus, D2D1_RECT_F& valueRect, D2D1_RECT_F& plus) {
         DrawLiquidGlass(rect, 17, true);
-        StrokeRounded(rect, 15, activeInput_ == field ? Color(AccentHex(), 0.90f) : Color(0xffffff, 0.12f),
-                      activeInput_ == field ? 1.5f : 1.0f);
+        const float selected = SmoothedHover(rect, activeInput_ == field, 0x494e50555453454cULL);
+        if (selected > 0.002f) StrokeRounded(rect, 15, Color(SelectionBlueHex(), 0.92f * selected), 1.7f);
         Text(label, D2D1::RectF(rect.left + 14, rect.top + 9, rect.right - 14, rect.top + 30),
-             formatCaption_, Color(0x7f8695));
+             formatCaption_, selected > 0.5f ? Color(kSelectionBlueLight) : Color(0x7f8a9e));
         minus = D2D1::RectF(rect.left + 10, rect.top + 43, rect.left + 46, rect.bottom - 11);
         plus = D2D1::RectF(rect.right - 46, rect.top + 43, rect.right - 10, rect.bottom - 11);
         valueRect = D2D1::RectF(minus.right + 3, rect.top + 38, plus.left - 3, rect.bottom - 8);
         DrawSmallButton(minus, L"−");
         DrawSmallButton(plus, L"+");
         const std::wstring shown = activeInput_ == field ? inputBuffer_ : std::to_wstring(value);
+        if (selected > 0.002f) FillRounded(valueRect, 10.0f, Color(SelectionBlueHex(), 0.11f * selected));
         Text(shown.empty() ? L"|" : shown, valueRect, formatHeading_, Color(0xf5f6fa),
              DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
     }
@@ -2317,7 +2319,7 @@ private:
         layout_.noRepeatToggle = D2D1::RectF(rect.right - 62, rect.top + 43, rect.right - 16, rect.top + 69);
         const float toggleAmount = SmoothedHover(layout_.noRepeatToggle, data_.noRepeat, 0x4e4f524550454154ULL);
         FillRounded(layout_.noRepeatToggle, 13,
-                    MixColor(Color(0xb9c4d9, 0.25f), Color(AccentHex(), 0.94f), toggleAmount));
+                    MixColor(Color(0x2a3342, 0.92f), Color(SelectionBlueHex(), 0.94f), toggleAmount));
         DrawGlassHighlight(layout_.noRepeatToggle, 13, 1.0f);
         StrokeRounded(layout_.noRepeatToggle, 13, Color(0xffffff, 0.28f));
         const float knobX = layout_.noRepeatToggle.left + 13 +
@@ -2329,31 +2331,30 @@ private:
     void DrawPrimaryButton(const D2D1_RECT_F& rect) {
         const bool hovered = Contains(rect, mouseX_, mouseY_);
         const float hover = SmoothedHover(rect, hovered, 0x5052494d415259ULL);
-        const float pulse = data_.motionEnabled && !drawing_ ? 0.5f + 0.5f * std::sin(AnimationSeconds() * 1.35f) : 0.0f;
-        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, -2.0f * hover);
-        DrawElevation(visual, 22, 13.0f + 5.0f * hover, 0.36f + 0.12f * hover);
-        if (!drawing_) DrawRadialGlow(D2D1::Point2F((visual.left + visual.right) * 0.5f, visual.bottom + 4.0f),
-                                      Width(visual) * 0.62f, AccentHex(), 0.07f + pulse * 0.035f);
+        const bool configured = awaitingConfirmation_ || (data_.quantity > 0 && PoolSize() > 0);
+        const float enabledAmount = configured || drawing_ ? 1.0f : 0.0f;
+        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, -1.5f * hover * enabledAmount);
+        DrawElevation(visual, 18, 9.0f + 4.0f * hover * enabledAmount, 0.28f + 0.08f * hover);
         ID2D1GradientStopCollection* stops = nullptr;
         ID2D1LinearGradientBrush* gradient = nullptr;
         const D2D1_GRADIENT_STOP gradientStops[] = {
-            {0.0f, Color(drawing_ ? 0x5b6473 : 0xffffff, 0.28f + 0.12f * hover)},
-            {0.18f, Color(drawing_ ? 0x3f4756 : AccentHex(), 0.93f + 0.07f * hover)},
-            {0.68f, Color(drawing_ ? 0x303746 : AccentHex(), 0.72f + 0.14f * hover)},
-            {1.0f, Color(drawing_ ? 0x202632 : 0x142245, 0.68f + 0.12f * hover)}
+            {0.0f, Color(configured && !drawing_ ? 0x5d9cff : 0x303949, 0.98f)},
+            {0.52f, Color(configured && !drawing_ ? SelectionBlueHex() : 0x252d3a, 0.98f)},
+            {1.0f, Color(configured && !drawing_ ? 0x1755c8 : 0x1b2230, 0.98f)}
         };
-        renderTarget_->CreateGradientStopCollection(gradientStops, 4, &stops);
+        renderTarget_->CreateGradientStopCollection(gradientStops, 3, &stops);
         if (stops) renderTarget_->CreateLinearGradientBrush(
             D2D1::LinearGradientBrushProperties(D2D1::Point2F(visual.left, visual.top), D2D1::Point2F(visual.right, visual.bottom)),
             stops, &gradient);
-        if (gradient) renderTarget_->FillRoundedRectangle(D2D1::RoundedRect(visual, 22, 22), gradient);
-        DrawGlassHighlight(visual, 22, 1.30f + 0.55f * hover);
-        StrokeRounded(visual, 22, Color(0xffffff, 0.28f + 0.20f * hover), 1.0f + 0.5f * hover);
-        const std::wstring label = drawing_ ? L"DRAWING…" : (awaitingConfirmation_ ? L"CONFIRM WINNERS" : L"DRAW WINNERS");
+        if (gradient) renderTarget_->FillRoundedRectangle(D2D1::RoundedRect(visual, 18, 18), gradient);
+        DrawGlassHighlight(visual, 18, 0.85f + 0.35f * hover * enabledAmount);
+        StrokeRounded(visual, 18, Color(configured ? 0x9bc1ff : 0xffffff, 0.22f + 0.14f * hover), 1.0f);
+        const std::wstring label = drawing_ ? L"DRAWING…" : (awaitingConfirmation_ ? L"CONFIRM WINNERS"
+                                                                                     : (configured ? L"DRAW WINNERS" : L"SETUP REQUIRED"));
         Text(label, D2D1::RectF(visual.left + 12, visual.top + 24, visual.right - 12, visual.top + 55),
              formatBodyMedium_, Color(0xffffff), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
         Text(drawing_ ? (presentationWindow_ ? L"Audience countdown live" : L"Finding the moment")
-                      : (awaitingConfirmation_ ? L"Save to history" : L"Space to launch"),
+                      : (awaitingConfirmation_ ? L"Save to history" : (configured ? L"Space to launch" : L"Enter values above 0")),
              D2D1::RectF(visual.left + 12, visual.top + 55, visual.right - 12, visual.bottom - 12),
              formatCaption_, Color(0xffffff, 0.72f), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
         SafeRelease(gradient);
@@ -2369,8 +2370,9 @@ private:
         const std::wstring badge = std::to_wstring(latestNumbers_.size()) + L" SELECTED";
         const D2D1_RECT_F badgeRect = D2D1::RectF(layout_.resultsCard.left + 156, layout_.resultsCard.top + 15,
                                                   layout_.resultsCard.left + 260, layout_.resultsCard.top + 43);
-        FillRounded(badgeRect, 14, Color(AccentHex(), 0.16f));
-        Text(badge, badgeRect, formatCaption_, Color(AccentHex()), DWRITE_TEXT_ALIGNMENT_CENTER,
+        FillRounded(badgeRect, 10, Color(SelectionBlueHex(), 0.16f));
+        StrokeRounded(badgeRect, 10, Color(SelectionBlueHex(), 0.32f));
+        Text(badge, badgeRect, formatCaption_, Color(kSelectionBlueLight), DWRITE_TEXT_ALIGNMENT_CENTER,
              DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
         if (awaitingConfirmation_) {
             layout_.redrawButton = D2D1::RectF(layout_.resultsCard.right - 246, layout_.resultsCard.top + 11,
@@ -2378,8 +2380,10 @@ private:
             layout_.confirmWinnersButton = D2D1::RectF(layout_.resultsCard.right - 132, layout_.resultsCard.top + 11,
                                                        layout_.resultsCard.right - 18, layout_.resultsCard.top + 48);
             DrawSecondaryButton(layout_.redrawButton, L"REDRAW");
-            FillRounded(layout_.confirmWinnersButton, 11,
-                        Contains(layout_.confirmWinnersButton, mouseX_, mouseY_) ? Color(AccentHex(), 0.94f) : Color(AccentHex(), 0.78f));
+            const float confirmHover = SmoothedHover(layout_.confirmWinnersButton,
+                                                      Contains(layout_.confirmWinnersButton, mouseX_, mouseY_),
+                                                      0x434f4e4649524d42ULL);
+            DrawSelectionBlock(OffsetRectF(layout_.confirmWinnersButton, 0.0f, -confirmHover), 11, 0.84f + 0.16f * confirmHover);
             Text(L"CONFIRM", layout_.confirmWinnersButton, formatCaption_, Color(0xffffff),
                  DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
         } else {
@@ -2486,15 +2490,12 @@ private:
             const float entry = EaseOutBack(progress);
             const D2D1_RECT_F lifted = OffsetRectF(tile, 0.0f, (1.0f - EaseOutCubic(progress)) * 34.0f);
             const D2D1_RECT_F visual = ScaleRectF(lifted, 0.84f + 0.16f * entry);
-            DrawElevation(visual, 17, index == 0 ? 13.0f : 9.0f, index == 0 ? 0.38f : 0.26f);
-            FillRounded(visual, 17, index == 0 ? Color(AccentHex(), 0.12f) : Color(0xffffff, 0.05f));
-            DrawGlassHighlight(visual, 17, index == 0 ? 1.6f : 0.9f);
-            StrokeRounded(visual, 17, index == 0 ? Color(AccentHex(), 0.68f) : Color(0xffffff, 0.10f),
-                          index == 0 ? 1.5f : 1.0f);
-            if (index == 0) FillRounded(D2D1::RectF(visual.left + 10, visual.top + 9, visual.left + 37, visual.top + 28), 9,
-                                        Color(AccentHex(), 0.22f));
+            DrawLiquidGlass(visual, 17, false, index == 0);
+            DrawSelectionBlock(visual, 17, index == 0 ? 0.74f : 0.22f);
+            FillRounded(D2D1::RectF(visual.left + 10, visual.top + 9, visual.left + 37, visual.top + 28), 8,
+                        Color(SelectionBlueHex(), index == 0 ? 0.88f : 0.30f));
             Text(std::to_wstring(index + 1), D2D1::RectF(visual.left + 10, visual.top + 7, visual.left + 38, visual.top + 30),
-                 formatCaption_, index == 0 ? Color(AccentHex()) : Color(0x6f7582), DWRITE_TEXT_ALIGNMENT_CENTER,
+                 formatCaption_, index == 0 ? Color(0xffffff) : Color(kSelectionBlueLight), DWRITE_TEXT_ALIGNMENT_CENTER,
                  DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
             Text(std::to_wstring(latestNumbers_[index]), D2D1::RectF(visual.left + 8, visual.top + 18, visual.right - 8,
                                                                     showNames ? visual.top + 77 : visual.bottom - 5),
@@ -2582,13 +2583,13 @@ private:
         const int pool = PoolSize();
         const float progress = pool > 0 ? static_cast<float>(used) / static_cast<float>(pool) : 0.0f;
         FillRounded(D2D1::RectF(left, y, left + (right - left) * std::clamp(progress, 0.0f, 1.0f), y + 6),
-                    3, Color(AccentHex()));
+                    3, Color(SelectionBlueHex()));
     }
 
     void DrawParticipantsPage() {
         const auto size = CanvasSize();
         const float margin = ContentMargin(size.width);
-        Text(L"PARTICIPANT DIRECTORY", D2D1::RectF(margin, 92, margin + 300, 113), formatCaption_, Color(AccentHex()));
+        Text(L"PARTICIPANT DIRECTORY", D2D1::RectF(margin, 92, margin + 300, 113), formatCaption_, Color(SelectionBlueHex()));
         Text(L"Bring names into the moment.", D2D1::RectF(margin, 114, size.width - margin, 155),
              formatTitle_, Color(0xf5f6fa));
         Text(L"Import UTF-8 CSV columns: ticket, name, group. Imported lists automatically drive the draw pool.",
@@ -2616,8 +2617,11 @@ private:
                                                        size.width - margin - 170, actionsTop + 42);
         layout_.clearParticipantsButton = D2D1::RectF(size.width - margin - 158, actionsTop,
                                                       size.width - margin, actionsTop + 42);
-        FillRounded(layout_.importParticipantsButton, 12,
-                    Contains(layout_.importParticipantsButton, mouseX_, mouseY_) ? Color(AccentHex(), 0.95f) : Color(AccentHex(), 0.75f));
+        const float importHover = SmoothedHover(layout_.importParticipantsButton,
+                                                Contains(layout_.importParticipantsButton, mouseX_, mouseY_),
+                                                0x494d504f52544353ULL);
+        DrawSelectionBlock(OffsetRectF(layout_.importParticipantsButton, 0.0f, -importHover), 12,
+                           0.82f + 0.18f * importHover);
         Text(data_.participants.empty() ? L"IMPORT CSV" : L"REPLACE CSV", layout_.importParticipantsButton,
              formatCaption_, Color(0xffffff), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
         DrawSecondaryButton(layout_.clearParticipantsButton, L"CLEAR LIST", true);
@@ -2654,9 +2658,10 @@ private:
                 Text(participant.group, D2D1::RectF(row.left + 128, row.top + 34, row.right - 330, row.bottom - 5),
                      formatCaption_, Color(0x737a88));
                 const D2D1_RECT_F status = D2D1::RectF(row.right - 170, row.top + 15, row.right - 18, row.bottom - 15);
-                FillRounded(status, 15, participant.won ? Color(0xe2ad4b, 0.16f) : Color(0x43c98b, 0.13f));
+                FillRounded(status, 15, participant.won ? Color(SelectionBlueHex(), 0.22f) : Color(0xffffff, 0.055f));
+                StrokeRounded(status, 15, participant.won ? Color(SelectionBlueHex(), 0.48f) : Color(0xffffff, 0.08f));
                 Text(participant.won ? L"WINNER" : L"ELIGIBLE", status, formatCaption_,
-                     participant.won ? Color(0xe7bc68) : Color(0x69dca3), DWRITE_TEXT_ALIGNMENT_CENTER,
+                     participant.won ? Color(kSelectionBlueLight) : Color(0x98a2b3), DWRITE_TEXT_ALIGNMENT_CENTER,
                      DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
             }
         }
@@ -2680,7 +2685,7 @@ private:
         auto iterator = std::find(groups.begin(), groups.end(), prize.eligibleGroup);
         size_t next = iterator == groups.end() ? 0 : (static_cast<size_t>(iterator - groups.begin()) + 1) % groups.size();
         prize.eligibleGroup = groups[next];
-        const int pool = std::max(1, PoolSize());
+        const int pool = std::max(0, PoolSize());
         data_.quantity = std::min(data_.quantity, pool);
         prize.winnerCount = data_.quantity;
         SaveState();
@@ -2690,7 +2695,7 @@ private:
     void DrawPrizesPage() {
         const auto size = CanvasSize();
         const float margin = ContentMargin(size.width);
-        Text(L"PRIZE PROGRAM", D2D1::RectF(margin, 92, margin + 280, 113), formatCaption_, Color(AccentHex()));
+        Text(L"PRIZE PROGRAM", D2D1::RectF(margin, 92, margin + 280, 113), formatCaption_, Color(SelectionBlueHex()));
         Text(L"Shape the rhythm of your event.", D2D1::RectF(margin, 114, size.width - margin, 155),
              formatTitle_, Color(0xf5f6fa));
         Text(L"Select a prize before drawing. Eligibility can target everyone or one imported participant group.",
@@ -2700,7 +2705,9 @@ private:
         layout_.addPrizeButton = D2D1::RectF(margin, actionsTop, margin + 142, actionsTop + 42);
         layout_.editPrizeButton = D2D1::RectF(margin + 154, actionsTop, margin + 296, actionsTop + 42);
         layout_.deletePrizeButton = D2D1::RectF(margin + 308, actionsTop, margin + 460, actionsTop + 42);
-        FillRounded(layout_.addPrizeButton, 12, Color(AccentHex(), Contains(layout_.addPrizeButton, mouseX_, mouseY_) ? 0.95f : 0.75f));
+        const float addHover = SmoothedHover(layout_.addPrizeButton, Contains(layout_.addPrizeButton, mouseX_, mouseY_),
+                                             0x4144445052495a45ULL);
+        DrawSelectionBlock(OffsetRectF(layout_.addPrizeButton, 0.0f, -addHover), 12, 0.82f + 0.18f * addHover);
         Text(L"+ ADD PRIZE", layout_.addPrizeButton, formatCaption_, Color(0xffffff), DWRITE_TEXT_ALIGNMENT_CENTER,
              DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
         DrawSecondaryButton(layout_.editPrizeButton, L"RENAME");
@@ -2724,11 +2731,13 @@ private:
             const D2D1_RECT_F card = D2D1::RectF(left, top, left + cardWidth, top + cardHeight);
             layout_.prizeCards[index] = card;
             const bool selected = static_cast<int>(index) == data_.selectedPrize;
-            DrawLiquidGlass(card, 21, true, selected);
-            if (selected) FillRounded(card, 21, Color(AccentHex(), 0.095f));
-            StrokeRounded(card, 18, selected ? Color(AccentHex(), 0.72f) : Color(0xffffff, 0.09f), selected ? 1.7f : 1.0f);
+            DrawLiquidGlass(card, 18, true, selected);
+            const float selectedAmount = SmoothedHover(card, selected, 0x5052495a4553454cULL);
+            if (selectedAmount > 0.002f) DrawSelectionBlock(card, 18, 0.52f * selectedAmount);
+            StrokeRounded(card, 18, selected ? Color(kSelectionBlueLight, 0.86f) : Color(0xffffff, 0.075f),
+                          selected ? 1.6f : 1.0f);
             Text(L"PRIZE " + std::to_wstring(index + 1), D2D1::RectF(card.left + 18, card.top + 14,
-                 card.right - 130, card.top + 36), formatCaption_, selected ? Color(AccentHex()) : Color(0x747b88));
+                 card.right - 130, card.top + 36), formatCaption_, selected ? Color(0xffffff) : Color(0x747b88));
             Text(data_.prizes[index].name, D2D1::RectF(card.left + 18, card.top + 40, card.right - 145, card.bottom - 14),
                  formatHeading_, Color(0xf0f2f7), DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
             const D2D1_RECT_F eligible = D2D1::RectF(card.right - 142, card.top + 18, card.right - 18, card.top + 48);
@@ -2756,7 +2765,7 @@ private:
              formatCaption_, Color(0x747b88));
         toggle = D2D1::RectF(row.right - 67, row.top + 22, row.right - 17, row.top + 50);
         const float toggleAmount = SmoothedHover(toggle, enabled, 0x544f47474c455345ULL);
-        FillRounded(toggle, 14, MixColor(Color(0xb9c4d9, 0.25f), Color(AccentHex(), 0.94f), toggleAmount));
+        FillRounded(toggle, 14, MixColor(Color(0x2a3342, 0.92f), Color(SelectionBlueHex(), 0.94f), toggleAmount));
         DrawGlassHighlight(toggle, 14, 1.0f);
         StrokeRounded(toggle, 14, Color(0xffffff, 0.28f));
         const float knobX = toggle.left + 14 + (Width(toggle) - 28) * toggleAmount;
@@ -2772,7 +2781,7 @@ private:
              DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
         toggle = D2D1::RectF(row.right - 62, row.top + 20, row.right - 14, row.top + 48);
         const float toggleAmount = SmoothedHover(toggle, enabled, 0x434f4d5041435454ULL);
-        FillRounded(toggle, 14, MixColor(Color(0xb9c4d9, 0.25f), Color(AccentHex(), 0.94f), toggleAmount));
+        FillRounded(toggle, 14, MixColor(Color(0x2a3342, 0.92f), Color(SelectionBlueHex(), 0.94f), toggleAmount));
         DrawGlassHighlight(toggle, 14, 0.85f);
         StrokeRounded(toggle, 14, Color(0xffffff, 0.28f));
         const float knobX = toggle.left + 14 + (Width(toggle) - 28) * toggleAmount;
@@ -2783,7 +2792,7 @@ private:
     void DrawShowPage() {
         const auto size = CanvasSize();
         const float margin = ContentMargin(size.width);
-        Text(L"AUDIENCE EXPERIENCE", D2D1::RectF(margin, 92, margin + 310, 113), formatCaption_, Color(AccentHex()));
+        Text(L"AUDIENCE EXPERIENCE", D2D1::RectF(margin, 92, margin + 310, 113), formatCaption_, Color(SelectionBlueHex()));
         Text(L"Turn the draw into a show.", D2D1::RectF(margin, 114, size.width - margin, 155),
              formatTitle_, Color(0xf5f6fa));
         Text(L"The audience window rotates welcome slides, then runs a countdown, draw animation, reveal, and summary.",
@@ -2831,7 +2840,7 @@ private:
              D2D1::RectF(preview.left + 34, preview.top + 80, preview.right - 34, preview.top + 190),
              formatTitle_, Color(0xf7f8fb), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
         Text(L"NEXT PRIZE", D2D1::RectF(preview.left + 30, preview.top + 204, preview.right - 30, preview.top + 236),
-             formatCaption_, Color(AccentHex()), DWRITE_TEXT_ALIGNMENT_CENTER);
+             formatCaption_, Color(kSelectionBlueLight), DWRITE_TEXT_ALIGNMENT_CENTER);
         Text(ActivePrize().name, D2D1::RectF(preview.left + 32, preview.top + 238, preview.right - 32, preview.top + 300),
              formatHeading_, Color(0xe8eaf0), DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
         Text(L"Welcome · Prize · Countdown · Draw · Reveal · Summary",
@@ -2845,12 +2854,8 @@ private:
         const bool presentationHovered = Contains(layout_.openPresentationButton, mouseX_, mouseY_);
         const float presentationHover = SmoothedHover(layout_.openPresentationButton, presentationHovered,
                                                        0x50524553454e5442ULL);
-        DrawElevation(layout_.openPresentationButton, 15, 9.0f + 4.0f * presentationHover,
-                      0.28f + 0.12f * presentationHover);
-        FillRounded(layout_.openPresentationButton, 15,
-                    Color(AccentHex(), 0.76f + 0.19f * presentationHover));
-        DrawGlassHighlight(layout_.openPresentationButton, 15, 1.0f + 0.55f * presentationHover);
-        StrokeRounded(layout_.openPresentationButton, 15, Color(0xffffff, 0.14f + 0.14f * presentationHover));
+        const D2D1_RECT_F presentationVisual = OffsetRectF(layout_.openPresentationButton, 0.0f, -presentationHover);
+        DrawSelectionBlock(presentationVisual, 14, 0.82f + 0.18f * presentationHover);
         Text(presentationWindow_ ? L"CLOSE AUDIENCE DISPLAY" : L"OPEN AUDIENCE DISPLAY",
              layout_.openPresentationButton, formatBodyMedium_, Color(0xffffff), DWRITE_TEXT_ALIGNMENT_CENTER,
              DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -2874,17 +2879,23 @@ private:
                                  L"Confetti", data_.confettiEnabled, layout_.confettiToggle);
         Text(L"ACCENT THEME", D2D1::RectF(sx, settings.top + 364, sr, settings.top + 388),
              formatCaption_, Color(0x7f8695));
-        static constexpr unsigned themes[] = {0xff7867, 0xffb84d, 0x55b9ff, 0xa77bff};
+        static constexpr unsigned themes[] = {0x2f7bff, 0x14b8a6, 0x8b5cf6, 0xf59e0b};
         const float themeGap = 12.0f;
         const float themeWidth = (Width(settings) - 40 - 3 * themeGap) / 4.0f;
         for (int index = 0; index < 4; ++index) {
             const float left = sx + index * (themeWidth + themeGap);
             layout_.themeButtons[index] = D2D1::RectF(left, settings.top + 394, left + themeWidth, settings.top + 438);
-            DrawElevation(layout_.themeButtons[index], 13, index == data_.themeIndex ? 8.0f : 4.0f,
-                          index == data_.themeIndex ? 0.30f : 0.15f);
-            FillRounded(layout_.themeButtons[index], 13, Color(themes[index], index == data_.themeIndex ? 1.0f : 0.38f));
-            DrawGlassHighlight(layout_.themeButtons[index], 13, index == data_.themeIndex ? 1.45f : 0.65f);
-            if (index == data_.themeIndex) StrokeRounded(layout_.themeButtons[index], 13, Color(0xffffff, 0.85f), 2.0f);
+            const float themeSelected = SmoothedHover(layout_.themeButtons[index], index == data_.themeIndex,
+                                                       0x5448454d4553454cULL + static_cast<std::uint64_t>(index));
+            DrawElevation(layout_.themeButtons[index], 13, 4.0f + 4.0f * themeSelected,
+                          0.14f + 0.14f * themeSelected);
+            FillRounded(layout_.themeButtons[index], 13, Color(themes[index], 0.36f + 0.60f * themeSelected));
+            if (themeSelected > 0.002f) {
+                StrokeRounded(layout_.themeButtons[index], 13, Color(SelectionBlueHex(), 0.94f * themeSelected), 2.2f);
+                FillRounded(D2D1::RectF(layout_.themeButtons[index].right - 22, layout_.themeButtons[index].top + 7,
+                                        layout_.themeButtons[index].right - 8, layout_.themeButtons[index].top + 21),
+                            7, Color(SelectionBlueHex(), themeSelected));
+            }
         }
 
         const D2D1_RECT_F scaleRow = D2D1::RectF(sx, settings.top + 452, sr, settings.top + 520);
@@ -2955,25 +2966,26 @@ private:
                       const std::wstring& value, D2D1_COLOR_F tint) {
         const bool hovered = Contains(rect, mouseX_, mouseY_);
         const float hover = SmoothedHover(rect, hovered, 0x5354415443415244ULL);
-        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, -2.0f * hover);
-        DrawElevation(visual, 17, 8.0f + 4.0f * hover, 0.24f + 0.10f * hover);
-        FillRounded(visual, 19, D2D1::ColorF(tint.r, tint.g, tint.b, 0.80f + 0.12f * hover));
-        DrawGlassHighlight(visual, 19, 1.15f + 0.65f * hover);
-        StrokeRounded(visual, 19, Color(0xffffff, 0.38f + 0.24f * hover));
-        Text(label, D2D1::RectF(visual.left + 15, visual.top + 12, visual.right - 15, visual.top + 34),
-             formatCaption_, Color(0x15171c, 0.62f));
-        Text(value, D2D1::RectF(visual.left + 15, visual.top + 34, visual.right - 15, visual.bottom - 9),
-             formatHeading_, Color(0x111318), DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, -1.5f * hover);
+        DrawLiquidGlass(visual, 16, false, true);
+        FillRounded(D2D1::RectF(visual.left + 14, visual.top + 14, visual.left + 18, visual.bottom - 14),
+                    2.0f, Color(SelectionBlueHex(), 0.66f + 0.24f * hover));
+        SetBrush(D2D1::ColorF(tint.r, tint.g, tint.b, 0.72f));
+        renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(visual.right - 20, visual.top + 20), 3.0f, 3.0f), brush_);
+        Text(label, D2D1::RectF(visual.left + 28, visual.top + 12, visual.right - 32, visual.top + 34),
+             formatCaption_, Color(0x8893a7));
+        Text(value, D2D1::RectF(visual.left + 28, visual.top + 34, visual.right - 15, visual.bottom - 9),
+             formatHeading_, Color(0xf4f7fb), DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
     }
 
     void DrawSecondaryButton(const D2D1_RECT_F& rect, const std::wstring& label, bool danger = false) {
         const bool hovered = Contains(rect, mouseX_, mouseY_);
         const float hover = SmoothedHover(rect, hovered, 0x5345434f4e444152ULL);
-        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, -2.0f * hover);
+        const D2D1_RECT_F visual = OffsetRectF(rect, 0.0f, -1.5f * hover);
         DrawLiquidGlass(visual, 14, false);
         if (danger && hover > 0.002f) FillRounded(visual, 14, Color(0xff6767, 0.13f * hover));
         StrokeRounded(visual, 12, danger ? Color(0xff7373, 0.26f + 0.22f * hover)
-                                        : MixColor(Color(0xffffff, 0.10f), Color(AccentHex(), 0.38f), hover));
+                                        : MixColor(Color(0xffffff, 0.10f), Color(SelectionBlueHex(), 0.52f), hover));
         Text(label, visual, formatCaption_, danger ? Color(0xff9b9b)
                                                    : MixColor(Color(0xc8cdd8), Color(0xffffff), hover),
              DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
@@ -3064,14 +3076,14 @@ private:
                                                  (size.width + width) / 2, (size.height + height) / 2);
         const D2D1_RECT_F card = ScaleRectF(baseCard, 0.90f + 0.10f * dialogEntry);
         DrawRadialGlow(D2D1::Point2F((card.left + card.right) * 0.5f, card.bottom), 260.0f,
-                       AccentHex(), 0.17f);
-        DrawLiquidGlass(card, 28, false, true);
+                       SelectionBlueHex(), 0.11f);
+        DrawLiquidGlass(card, 22, false, true);
         const D2D1_RECT_F icon = D2D1::RectF(card.left + 24, card.top + 24, card.left + 70, card.top + 70);
         const bool destructive = dialog_ == DialogType::ClearHistory || dialog_ == DialogType::ClearParticipants ||
                                  dialog_ == DialogType::DeletePrize;
-        FillRounded(icon, 14, destructive ? Color(0xff6767, 0.15f) : Color(AccentHex(), 0.16f));
+        FillRounded(icon, 12, destructive ? Color(0xff6767, 0.15f) : Color(SelectionBlueHex(), 0.20f));
         Text(destructive ? L"×" : (textDialog ? L"✎" : L"↻"), icon, formatHeading_,
-             destructive ? Color(0xff8a8a) : Color(AccentHex()),
+             destructive ? Color(0xff8a8a) : Color(kSelectionBlueLight),
              DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 
         std::wstring title;
@@ -3121,7 +3133,8 @@ private:
             layout_.dialogTextField = D2D1::RectF(card.left + 24, card.top + 152, card.right - 24, card.top + 202);
             DrawLiquidGlass(layout_.dialogTextField, 15, true);
             FillRounded(layout_.dialogTextField, 15, Color(0x030b19, 0.42f));
-            StrokeRounded(layout_.dialogTextField, 13, Color(AccentHex(), 0.70f), 1.5f);
+            DrawSelectionBlock(layout_.dialogTextField, 13, 0.24f);
+            StrokeRounded(layout_.dialogTextField, 13, Color(SelectionBlueHex(), 0.86f), 1.5f);
             Text(dialogText_.empty() ? L"Type a name…" : dialogText_,
                  D2D1::RectF(layout_.dialogTextField.left + 14, layout_.dialogTextField.top,
                              layout_.dialogTextField.right - 14, layout_.dialogTextField.bottom),
@@ -3134,9 +3147,16 @@ private:
         layout_.dialogCancel = D2D1::RectF(card.left + 24, card.bottom - 66, card.left + 222, card.bottom - 22);
         layout_.dialogConfirm = D2D1::RectF(card.left + 234, card.bottom - 66, card.right - 24, card.bottom - 22);
         DrawSecondaryButton(layout_.dialogCancel, L"CANCEL");
-        FillRounded(layout_.dialogConfirm, 13, destructive
-                    ? (Contains(layout_.dialogConfirm, mouseX_, mouseY_) ? Color(0xd95656) : Color(0xb94848))
-                    : (Contains(layout_.dialogConfirm, mouseX_, mouseY_) ? Color(AccentHex(), 0.98f) : Color(AccentHex(), 0.78f)));
+        const float confirmHover = SmoothedHover(layout_.dialogConfirm,
+                                                  Contains(layout_.dialogConfirm, mouseX_, mouseY_),
+                                                  0x4449414c4f474f4bULL);
+        if (destructive) {
+            FillRounded(OffsetRectF(layout_.dialogConfirm, 0.0f, -confirmHover), 13,
+                        MixColor(Color(0xb94848), Color(0xdf5a5a), confirmHover));
+        } else {
+            DrawSelectionBlock(OffsetRectF(layout_.dialogConfirm, 0.0f, -confirmHover), 13,
+                               0.82f + 0.18f * confirmHover);
+        }
         Text(confirm, layout_.dialogConfirm, formatCaption_, Color(0xffffff),
              DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
     }
@@ -3149,14 +3169,14 @@ private:
         const float offset = (1.0f - progress) * 36.0f;
         const D2D1_RECT_F rect = D2D1::RectF((size.width - width) / 2, size.height - 69 + offset,
                                              (size.width + width) / 2, size.height - 22 + offset);
-        DrawElevation(rect, 18, 14.0f, 0.38f);
-        FillRounded(rect, 18, Color(0xf4f7ff, 0.90f));
-        DrawGlassHighlight(rect, 18, 1.20f);
-        StrokeRounded(rect, 18, Color(0xffffff, 0.70f));
-        SetBrush(Color(0x4e68ff));
+        DrawElevation(rect, 15, 12.0f, 0.38f);
+        FillRounded(rect, 15, Color(0x111a2a, 0.97f));
+        DrawGlassHighlight(rect, 15, 0.82f);
+        StrokeRounded(rect, 15, Color(SelectionBlueHex(), 0.54f));
+        SetBrush(Color(SelectionBlueHex()));
         renderTarget_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(rect.left + 24, rect.top + 23.5f), 5, 5), brush_);
         Text(toast_, D2D1::RectF(rect.left + 38, rect.top, rect.right - 18, rect.bottom), formatBodyMedium_,
-             Color(0x16181d), DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+             Color(0xf4f7fb), DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
     }
 };
 

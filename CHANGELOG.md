@@ -2,6 +2,23 @@
 
 All notable changes to JAYCEE Lottery are documented here.
 
+## 3.0.0 - 2026-09-06
+
+### Added
+
+- Complete Midnight Command Center redesign with a near-black canvas, graphite surfaces, compact hierarchy, and electric-blue selection language.
+- Reusable blue selected blocks for active navigation, focused inputs, chosen prizes, winner results, dialogs, and primary actions.
+- Safe setup state that clearly disables drawing until both winner count and the available pool are above zero.
+- Automated installer-payload integrity test that verifies the packaged application matches the release executable.
+
+### Changed
+
+- Winner count, total coupons, and new-prize winner defaults now begin at `0` for a deliberate event setup workflow.
+- Motion curves, hover lift, shadows, transitions, and audience animations are restrained and tuned for smoother visual continuity.
+- The audience display and installer now share the same midnight palette and blue focus treatment.
+- Mouse-follow lighting and pointer parallax remain removed; ambient motion is independent of the pointer.
+- Existing saved event data is preserved and continues to load normally.
+
 ## 2.2.2 - 2026-09-02
 
 ### Changed

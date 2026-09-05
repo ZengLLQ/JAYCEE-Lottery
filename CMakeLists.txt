@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(JAYCEELottery VERSION 2.2.2 LANGUAGES CXX RC)
+project(JAYCEELottery VERSION 3.0.0 LANGUAGES CXX RC)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -107,3 +107,14 @@ set_target_properties(JAYCEELotteryInstaller PROPERTIES
     OUTPUT_NAME "JAYCEE-Lottery-Setup"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
+
+include(CTest)
+if(BUILD_TESTING)
+    add_test(NAME installer_payload_integrity
+        COMMAND "${CMAKE_COMMAND}"
+            "-DINSTALLER=$<TARGET_FILE:JAYCEELotteryInstaller>"
+            "-DAPP=$<TARGET_FILE:JAYCEELottery>"
+            "-DOUTPUT_DIR=${CMAKE_BINARY_DIR}/test-installer-payload"
+            -P "${CMAKE_SOURCE_DIR}/tests/verify_installer_payload.cmake"
+    )
+endif()

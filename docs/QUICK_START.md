@@ -5,7 +5,7 @@ JAYCEE Lottery is a native 64-bit Windows event drawing and audience-presentatio
 ## Start a numeric draw
 
 1. Open **Draw**.
-2. Set the number of **Winners** and **Total Coupons**.
+2. Set the number of **Winners** and **Total Coupons** above `0`. Both begin at `0` in a new setup.
 3. Choose **Draw Winners** or press `Space`.
 4. Review the candidates, then confirm or redraw.
 
@@ -23,7 +23,7 @@ Imported participants replace numeric mode. The optional group column can restri
 
 ## Present to an audience
 
-Open **Show**, customize the glass tint and effects, then select **Open Audience Display**. Keep **Liquid motion** enabled for fluid lens highlights, ambient light, eased scrolling, and cinematic winner reveals. The window opens fullscreen on a second monitor when one is available.
+Open **Show**, customize the accent and effects, then select **Open Audience Display**. Keep **Liquid motion** enabled for smooth ambient light, eased scrolling, page transitions, and cinematic winner reveals. The window opens fullscreen on a second monitor when one is available. No lighting or parallax follows the mouse pointer.
 
 ## Useful controls
 

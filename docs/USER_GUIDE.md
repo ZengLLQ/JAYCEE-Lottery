@@ -19,9 +19,11 @@ The installer can create a desktop shortcut and always adds Start Menu and unins
 Numeric mode is active when no participant CSV is loaded.
 
 1. Open **Draw**.
-2. Set **Winners** to the number of candidates needed in one draw.
-3. Set **Total Coupons** to the highest coupon number in the pool.
+2. Set **Winners** to the number of candidates needed in one draw. It starts at `0` for a new setup.
+3. Set **Total Coupons** to the highest coupon number in the pool. It also starts at `0`.
 4. Leave **No repeat pool** off when numbers may win again, or turn it on to exclude confirmed winners.
+
+The primary draw button remains in **Setup Required** state until both values are above `0`, preventing an accidental draw from an unconfigured event.
 
 ### Participant mode
 
@@ -35,11 +37,15 @@ Open **Prizes** to:
 
 - add or rename prizes;
 - choose the active prize;
-- set a default winner count for each prize;
+- set a default winner count for each prize (new prizes begin at `0`);
 - restrict a prize to a participant group; or
 - remove unused prizes.
 
 At least one prize always remains. Group eligibility is available when a participant CSV contains group values.
+
+## Visual selection language
+
+Bright blue blocks identify what is currently selected or ready for action. The same treatment appears on the active page, focused numeric input, selected prize, chosen winner cards, dialog focus, and primary action. Neutral graphite surfaces remain unselected, so the operator can recognize the current state at a glance.
 
 ## 3. Run a draw
 
@@ -81,7 +87,7 @@ Use the **Interface Scale** control on the Show page or these shortcuts:
 
 The range is 75% to 135%. When the scaled workspace is taller than the window, a slim scroll indicator appears at the right edge. Use the mouse wheel to move the page with eased inertia. When the pointer is over a long participant, result, or history list, the wheel scrolls that list first.
 
-The **Liquid motion** switch on the Show page pauses ambient animation, scroll easing, and transitions while retaining the interface's static depth and hierarchy. No light follows the mouse pointer. Animation timing adapts to the display refresh rate, so the same transitions remain smooth and similarly paced on standard and high-refresh monitors.
+The **Liquid motion** switch on the Show page pauses ambient animation, scroll easing, and transitions while retaining the interface's static depth and hierarchy. No light or background parallax follows the mouse pointer. Animation timing adapts to the display refresh rate, so the same transitions remain smooth and similarly paced on standard and high-refresh monitors.
 
 ## 7. Review and export results
 
